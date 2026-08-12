@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #FAFAF9;
+  --foreground: #1C1917;
+  --primary: #E85D26;
+  --primary-foreground: #FAFAF9;
+  --secondary: #F5F0E8;
+  --secondary-foreground: #1C1917;
+  --accent: #C94A18;
+  --accent-foreground: #FAFAF9;
+  --muted: #F0EBE3;
+  --muted-foreground: #78716C;
+  --card: #FFFFFF;
+  --card-foreground: #1C1917;
+  --border: #E7E0D8;
+  --input: #F0EBE3;
+  --ring: #E85D26;
+  --radius: 1rem;
+  --font-sans: var(--font-dm-sans), 'DM Sans', sans-serif;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  h1, h2, h3, h4, h5, h6, p {
+    margin: 0;
+  }
+}
+
+@layer utilities {
+  .text-hero-xl {
+    font-size: clamp(3rem, 8vw, 5.5rem);
+    line-height: 0.88;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .text-display {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.05;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+  }
+  .img-mask-rounded {
+    clip-path: inset(0 0 0 0 round 2rem);
+  }
+  .shadow-warm {
+    box-shadow: 0 40px 100px -20px rgba(28, 25, 23, 0.08);
+  }
+  .shadow-primary-glow {
+    box-shadow: 0 8px 32px rgba(232, 93, 38, 0.35);
+  }
+  .noise-overlay::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .hero-title-item {
+    opacity: 0.18;
+    transition: all 0.45s cubic-bezier(0.23, 1, 0.32, 1);
+    cursor: pointer;
+  }
+  .hero-title-item.active {
+    opacity: 1;
+    transform: translateX(1.25rem);
+  }
+  .bento-card-hover {
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .bento-card-hover:hover {
+    transform: scale(1.02) rotate(0.5deg);
+    box-shadow: -6px 8px 40px 4px rgba(28, 25, 23, 0.12);
+  }
+  .product-card-overlay {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .product-card:hover .product-card-overlay {
+    opacity: 1;
+  }
+  .product-card:hover .product-img {
+    transform: scale(1.06);
+  }
+  .product-img {
+    transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .counter-animate {
+    transition: all 0.3s ease;
+  }
+  .gallery-grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(28,25,23,0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(28,25,23,0.06) 1px, transparent 1px);
+    background-size: 3rem 3rem;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 60%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 60%, transparent 100%);
+  }
+  .filter-chip {
+    transition: all 0.2s ease;
+  }
+  .filter-chip.active {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .qty-btn {
+    transition: background-color 0.15s ease, transform 0.15s ease;
+  }
+  .qty-btn:hover {
+    transform: scale(1.1);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-primary-foreground font-bold text-sm uppercase tracking-widest rounded-full hover:bg-accent transition-all duration-200 shadow-primary-glow hover:scale-105 active:scale-95;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-8 py-4 bg-transparent text-foreground font-bold text-sm uppercase tracking-widest rounded-full border-2 border-foreground hover:bg-foreground hover:text-background transition-all duration-200;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-transparent text-muted-foreground font-semibold text-sm hover:text-foreground transition-colors duration-200;
+  }
+  .section-label {
+    @apply text-[10px] font-black uppercase tracking-[0.4em] text-primary;
+  }
+  .card-base {
+    @apply bg-card rounded-2xl border border-border overflow-hidden;
+  }
+}
+
+/* Scroll reveal animation */
+.reveal-on-scroll {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* GSAP start state — library overrides these */
+.gsap-hidden {
+  opacity: 1;
+}
