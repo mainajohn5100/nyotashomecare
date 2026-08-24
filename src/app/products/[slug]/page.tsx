@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -7,6 +7,8 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import AppImage from '@/components/ui/AppImage';
 import Icon from '@/components/ui/AppIcon';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 
 interface Product {
   id: string;
@@ -25,6 +27,15 @@ interface Product {
   categories?: { name: string; slug: string } | null;
 }
 
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image: string;
+  slug: string;
+}
+
 const KES_RATE = 130;
 function formatPrice(usd: number): string {
   return `KSh ${(usd * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
@@ -33,6 +44,8 @@ function formatPrice(usd: number): string {
 export default function ProductDetailPage() {
   const params = useParams();
   const slug = params?.slug as string;
+  const { user } = useAuth();
+  const router = useRouter();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
@@ -40,6 +53,7 @@ export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [activeImg, setActiveImg] = useState(0);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -71,21 +85,46 @@ export default function ProductDetailPage() {
     fetchProduct();
   }, [slug]);
 
-  const handleAddToCart = () => {
+  const allImages = product
+    ? [
+        ...(product.images && product.images.length > 0 ? product.images : []),
+        ...(product.image_url && !(product.images && product.images.includes(product.image_url)) ? [product.image_url] : []),
+      ].filter(Boolean)
+    : [];
+
+  const handleAddToCart = useCallback(() => {
+    if (!user) {
+      setShowLoginPrompt(true);
+      setTimeout(() => setShowLoginPrompt(false), 3000);
+      return;
+    }
+    if (!product) return;
+    try {
+      const stored = localStorage.getItem('cart');
+      const cart: CartItem[] = stored ? JSON.parse(stored) : [];
+      const existing = cart.find(item => item.id === product.id);
+      if (existing) {
+        existing.quantity = Math.min(existing.quantity + quantity, product.stock_quantity);
+      } else {
+        cart.push({
+          id: product.id,
+          name: product.name,
+          price: product.price * KES_RATE,
+          quantity,
+          image: allImages[0] || '/assets/images/no_image.png',
+          slug: product.slug,
+        });
+      }
+      localStorage.setItem('cart', JSON.stringify(cart));
+      window.dispatchEvent(new Event('cart-updated'));
+    } catch {}
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
-  };
+  }, [user, product, quantity, allImages]);
 
   const discount = product?.original_price
     ? Math.round(((product.original_price - product.price) / product.original_price) * 100)
     : null;
-
-  const allImages = product
-    ? [
-        ...(product.images && product.images.length > 0 ? product.images : []),
-        ...(product.image_url ? [product.image_url] : []),
-      ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i)
-    : [];
 
   if (loading) {
     return (
@@ -117,6 +156,8 @@ export default function ProductDetailPage() {
     );
   }
 
+  const currentImage = allImages[activeImg] || '/assets/images/no_image.png';
+
   return (
     <>
       <Header />
@@ -145,8 +186,9 @@ export default function ProductDetailPage() {
             <div>
               <div className="relative aspect-square rounded-3xl overflow-hidden bg-secondary border border-border mb-3">
                 <AppImage
-                  src={allImages[activeImg] || '/assets/images/no_image.png'}
-                  alt={product.name}
+                  key={currentImage}
+                  src={currentImage}
+                  alt={`${product.name} - image ${activeImg + 1}`}
                   fill
                   priority
                   className="object-cover"
@@ -167,11 +209,12 @@ export default function ProductDetailPage() {
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {allImages.map((img, i) => (
                     <button
-                      key={i}
+                      key={`thumb-${i}-${img}`}
+                      type="button"
                       onClick={() => setActiveImg(i)}
-                      className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${activeImg === i ? 'border-primary' : 'border-border hover:border-primary/50'}`}
+                      className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${activeImg === i ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/50'}`}
                     >
-                      <AppImage src={img} alt={`${product.name} image ${i + 1}`} width={64} height={64} className="object-cover w-full h-full" />
+                      <AppImage src={img} alt={`${product.name} thumbnail ${i + 1}`} width={64} height={64} className="object-cover w-full h-full" />
                     </button>
                   ))}
                 </div>
@@ -235,6 +278,18 @@ export default function ProductDetailPage() {
                   {product.stock_quantity > 0 ? `${product.stock_quantity} in stock` : 'Out of stock'}
                 </span>
               </div>
+
+              {/* Login prompt */}
+              {showLoginPrompt && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2">
+                  <Icon name="ExclamationTriangleIcon" size={16} className="text-amber-600 flex-shrink-0" />
+                  <p className="text-sm text-amber-800 font-medium">
+                    Please{' '}
+                    <Link href="/login" className="font-black underline">sign in</Link>
+                    {' '}to add items to your cart.
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-center gap-4 mb-6">
                 <div className="flex items-center gap-1 bg-secondary rounded-full border border-border p-1">

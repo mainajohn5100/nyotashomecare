@@ -15,6 +15,9 @@ const KES_RATE = 130;
 function formatPrice(amount: number): string {
   return `KSh ${(amount * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
 }
+function formatKES(amount: number): string {
+  return `KSh ${amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+}
 
 interface Product {
   id: string;
@@ -77,6 +80,13 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
+  // Search state
+  const [productSearch, setProductSearch] = useState('');
+  const [orderSearch, setOrderSearch] = useState('');
+
+  // Low stock threshold
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
+
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState({
@@ -129,7 +139,10 @@ export default function AdminPage() {
 
   const fetchOrders = useCallback(async () => {
     const supabase = createClient();
-    const { data } = await supabase.from('orders').select('*, user_profiles(full_name, email), order_items(id, product_name, quantity, total_price)').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('orders')
+      .select('*, user_profiles(full_name, email), order_items(id, product_name, quantity, total_price)')
+      .order('created_at', { ascending: false });
     if (data) setOrders(data);
   }, []);
 
@@ -138,6 +151,19 @@ export default function AdminPage() {
     setLoadingData(true);
     Promise.all([fetchProducts(), fetchCategories(), fetchOrders()]).finally(() => setLoadingData(false));
   }, [isAdmin, fetchProducts, fetchCategories, fetchOrders]);
+
+  // Real-time orders subscription
+  useEffect(() => {
+    if (!isAdmin) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel('orders-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [isAdmin, fetchOrders]);
 
   const handleImageUpload = async (files: FileList) => {
     if (!files.length) return;
@@ -307,6 +333,34 @@ export default function AdminPage() {
 
   const totalRevenue = orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.total_amount, 0);
 
+  // Daily sales: orders created today (not cancelled)
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dailySalesOrders = orders.filter(o => o.status !== 'cancelled' && o.created_at?.slice(0, 10) === todayStr);
+  const dailySalesAmount = dailySalesOrders.reduce((sum, o) => sum + o.total_amount, 0);
+
+  // Total stock valuation: sum of (price * stock_quantity) for all active products
+  const totalStockValuation = products
+    .filter(p => p.is_active)
+    .reduce((sum, p) => sum + p.price * KES_RATE * p.stock_quantity, 0);
+
+  // Low stock products
+  const lowStockProducts = products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= lowStockThreshold);
+
+  // Filtered products for search
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+    (p.categories?.name || '').toLowerCase().includes(productSearch.toLowerCase()) ||
+    (p.badge || '').toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  // Filtered orders for search
+  const filteredOrders = orders.filter(o =>
+    o.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+    (o.user_profiles?.full_name || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+    (o.user_profiles?.email || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+    o.status.toLowerCase().includes(orderSearch.toLowerCase())
+  );
+
   return (
     <>
       <Header />
@@ -346,12 +400,15 @@ export default function AdminPage() {
             <>
               {activeTab === 'overview' && (
                 <div>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                  {/* Stats Cards */}
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                     {[
                       { label: 'Total Products', value: products.length, icon: 'ArchiveBoxIcon', color: 'text-blue-600' },
                       { label: 'Categories', value: categories.length, icon: 'TagIcon', color: 'text-purple-600' },
                       { label: 'Total Orders', value: orders.length, icon: 'ShoppingBagIcon', color: 'text-orange-600' },
-                      { label: 'Revenue', value: formatPrice(totalRevenue), icon: 'CurrencyDollarIcon', color: 'text-green-600' },
+                      { label: 'Total Revenue', value: formatKES(totalRevenue * KES_RATE), icon: 'BanknotesIcon', color: 'text-green-600' },
+                      { label: "Today's Sales", value: formatKES(dailySalesAmount * KES_RATE), icon: 'CalendarDaysIcon', color: 'text-teal-600' },
+                      { label: 'Stock Valuation', value: formatKES(totalStockValuation), icon: 'CubeIcon', color: 'text-indigo-600' },
                     ].map((stat) => (
                       <div key={stat.label} className="bg-card border border-border rounded-2xl p-5 shadow-warm">
                         <Icon name={stat.icon as any} size={24} className={`${stat.color} mb-3`} />
@@ -360,11 +417,31 @@ export default function AdminPage() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Low Stock Alert */}
+                  {lowStockProducts.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Icon name="ExclamationTriangleIcon" size={20} className="text-amber-600" />
+                        <h3 className="font-black text-amber-800">Low Stock Alert ({lowStockProducts.length} products)</h3>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {lowStockProducts.map(p => (
+                          <span key={p.id} className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1 rounded-full">
+                            {p.name} — {p.stock_quantity} left
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-card border border-border rounded-2xl p-6 shadow-warm">
                       <h3 className="font-black text-foreground mb-4">Recent Orders</h3>
                       <div className="space-y-3">
-                        {orders.slice(0, 5).map((order) => (
+                        {orders.slice(0, 5).length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No orders yet.</p>
+                        ) : orders.slice(0, 5).map((order) => (
                           <div key={order.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                             <div>
                               <p className="text-sm font-bold text-foreground">#{order.id.slice(0, 8).toUpperCase()}</p>
@@ -372,7 +449,7 @@ export default function AdminPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className={`text-xs font-bold px-2 py-1 rounded-full capitalize ${statusColors[order.status] || ''}`}>{order.status}</span>
-                              <span className="text-sm font-black text-foreground">{formatPrice(order.total_amount)}</span>
+                              <span className="text-sm font-black text-foreground">{formatKES(order.total_amount)}</span>
                             </div>
                           </div>
                         ))}
@@ -401,12 +478,69 @@ export default function AdminPage() {
 
               {activeTab === 'products' && (
                 <div>
-                  <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-xl font-black text-foreground">Products ({products.length})</h2>
-                    <button onClick={() => openProductForm()} className="btn-primary !px-5 !py-2.5 !text-xs">
-                      <Icon name="PlusIcon" size={16} />
-                      Add Product
-                    </button>
+                  {/* Low Stock Threshold Setting */}
+                  <div className="bg-card border border-border rounded-2xl p-5 mb-5 shadow-warm flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex items-center gap-2 flex-1">
+                      <Icon name="ExclamationTriangleIcon" size={18} className="text-amber-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-black text-foreground">Low Stock Threshold</p>
+                        <p className="text-xs text-muted-foreground">Products at or below this quantity will be flagged as low stock</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min={1}
+                        value={lowStockThreshold}
+                        onChange={(e) => setLowStockThreshold(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-24 px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                      <span className="text-sm text-muted-foreground font-medium">units</span>
+                    </div>
+                  </div>
+
+                  {/* Low Stock Products */}
+                  {lowStockProducts.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon name="ExclamationTriangleIcon" size={16} className="text-amber-600" />
+                        <span className="text-sm font-black text-amber-800">
+                          {lowStockProducts.length} product{lowStockProducts.length !== 1 ? 's' : ''} nearing end of stock
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {lowStockProducts.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => openProductForm(p)}
+                            className="text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1 rounded-full transition-colors"
+                          >
+                            {p.name} — {p.stock_quantity} left
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                    <h2 className="text-xl font-black text-foreground">Products ({filteredProducts.length})</h2>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      {/* Search */}
+                      <div className="relative flex-1 sm:flex-none">
+                        <Icon name="MagnifyingGlassIcon" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          placeholder="Search products…"
+                          className="w-full sm:w-56 pl-9 pr-4 py-2.5 rounded-full border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </div>
+                      <button onClick={() => openProductForm()} className="btn-primary !px-5 !py-2.5 !text-xs whitespace-nowrap">
+                        <Icon name="PlusIcon" size={16} />
+                        Add Product
+                      </button>
+                    </div>
                   </div>
 
                   {showProductForm && (
@@ -468,8 +602,8 @@ export default function AdminPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                         {[
                           { label: 'Product Name *', key: 'name', type: 'text', placeholder: 'e.g. Linen Cloud Sofa' },
-                          { label: 'Price (USD) *', key: 'price', type: 'number', placeholder: '0.00' },
-                          { label: 'Original Price (USD)', key: 'original_price', type: 'number', placeholder: '0.00' },
+                          { label: 'Price (KES) *', key: 'price', type: 'number', placeholder: '0.00' },
+                          { label: 'Original Price (KES)', key: 'original_price', type: 'number', placeholder: '0.00' },
                           { label: 'Stock Quantity', key: 'stock_quantity', type: 'number', placeholder: '0' },
                           { label: 'Badge', key: 'badge', type: 'text', placeholder: 'e.g. New, Best Seller' },
                         ].map((field) => (
@@ -539,8 +673,15 @@ export default function AdminPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {products.map((product) => {
+                          {filteredProducts.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="px-5 py-10 text-center text-muted-foreground text-sm">
+                                {productSearch ? 'No products match your search.' : 'No products yet.'}
+                              </td>
+                            </tr>
+                          ) : filteredProducts.map((product) => {
                             const displayImg = (product.images && product.images.length > 0) ? product.images[0] : product.image_url;
+                            const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= lowStockThreshold;
                             return (
                               <tr key={product.id} className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors">
                                 <td className="px-5 py-4">
@@ -559,7 +700,14 @@ export default function AdminPage() {
                                   <p className="font-bold text-foreground text-sm">{formatPrice(product.price)}</p>
                                   {product.original_price && <p className="text-xs text-muted-foreground line-through">{formatPrice(product.original_price)}</p>}
                                 </td>
-                                <td className="px-5 py-4 text-sm text-foreground font-bold">{product.stock_quantity}</td>
+                                <td className="px-5 py-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm text-foreground font-bold">{product.stock_quantity}</span>
+                                    {isLowStock && (
+                                      <span className="text-[10px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">LOW</span>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-5 py-4">
                                   <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${product.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                     {product.is_active ? 'Active' : 'Inactive'}
@@ -660,42 +808,61 @@ export default function AdminPage() {
 
               {activeTab === 'orders' && (
                 <div>
-                  <h2 className="text-xl font-black text-foreground mb-5">Orders ({orders.length})</h2>
-                  <div className="space-y-4">
-                    {orders.map((order) => (
-                      <div key={order.id} className="bg-card border border-border rounded-2xl p-6 shadow-warm">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                          <div>
-                            <p className="font-black text-foreground">#{order.id.slice(0, 8).toUpperCase()}</p>
-                            <p className="text-sm text-muted-foreground">{order.user_profiles?.full_name || 'Guest'} · {order.user_profiles?.email}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {new Date(order.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <select
-                              value={order.status}
-                              onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                              className="px-3 py-2 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                            >
-                              {ORDER_STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                            </select>
-                            <span className="text-lg font-black text-foreground">{formatPrice(order.total_amount)}</span>
-                          </div>
-                        </div>
-                        {order.order_items && order.order_items.length > 0 && (
-                          <div className="border-t border-border pt-3 space-y-2">
-                            {order.order_items.map((item) => (
-                              <div key={item.id} className="flex items-center justify-between text-sm">
-                                <span className="text-foreground">{item.product_name} × {item.quantity}</span>
-                                <span className="font-bold text-foreground">{formatPrice(item.total_price)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                    <h2 className="text-xl font-black text-foreground">Orders ({filteredOrders.length})</h2>
+                    <div className="relative">
+                      <Icon name="MagnifyingGlassIcon" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={orderSearch}
+                        onChange={(e) => setOrderSearch(e.target.value)}
+                        placeholder="Search by name, email, status…"
+                        className="w-full sm:w-64 pl-9 pr-4 py-2.5 rounded-full border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                    </div>
                   </div>
+                  {filteredOrders.length === 0 ? (
+                    <div className="bg-card border border-border rounded-2xl p-10 text-center">
+                      <Icon name="ShoppingBagIcon" size={40} className="text-muted-foreground mx-auto mb-3" />
+                      <p className="text-muted-foreground text-sm">{orderSearch ? 'No orders match your search.' : 'No orders yet.'}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredOrders.map((order) => (
+                        <div key={order.id} className="bg-card border border-border rounded-2xl p-6 shadow-warm">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                            <div>
+                              <p className="font-black text-foreground">#{order.id.slice(0, 8).toUpperCase()}</p>
+                              <p className="text-sm text-muted-foreground">{order.user_profiles?.full_name || 'Guest'} · {order.user_profiles?.email}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {new Date(order.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <select
+                                value={order.status}
+                                onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                                className="px-3 py-2 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                              >
+                                {ORDER_STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                              </select>
+                              <span className="text-lg font-black text-foreground">{formatKES(order.total_amount)}</span>
+                            </div>
+                          </div>
+                          {order.order_items && order.order_items.length > 0 && (
+                            <div className="border-t border-border pt-3 space-y-2">
+                              {order.order_items.map((item) => (
+                                <div key={item.id} className="flex items-center justify-between text-sm">
+                                  <span className="text-foreground">{item.product_name} × {item.quantity}</span>
+                                  <span className="font-bold text-foreground">{formatKES(item.total_price)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </>
