@@ -14,7 +14,7 @@ export default function ProductsPage() {
   return (
     <>
       <Header />
-      <main className="pt-20">
+      <main className="pt-20 overflow-hidden" style={{ height: '100vh' }}>
         <Suspense fallback={null}>
           <ProductsClient />
         </Suspense>

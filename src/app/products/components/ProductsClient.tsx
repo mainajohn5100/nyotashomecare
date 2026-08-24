@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import AppImage from '@/components/ui/AppImage';
 import Icon from '@/components/ui/AppIcon';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,6 +24,12 @@ interface Product {
   is_active?: boolean;
   categories?: { name: string; slug: string } | null;
   created_at?: string;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 const sortOptions = ['Featured', 'Price: Low to High', 'Price: High to Low', 'Best Rated', 'Newest'];
@@ -53,30 +59,46 @@ export default function ProductsClient() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<string[]>(['All']);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Collapsible filter sections — categories collapsed by default
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [priceOpen, setPriceOpen] = useState(true);
+  const [sortOpen, setSortOpen] = useState(true);
+
   const gridRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchData = async () => {
       setLoading(true);
       const supabase = createClient();
-      const { data } = await supabase
+
+      // Fetch categories directly from the categories table
+      const { data: catData } = await supabase
+        .from('categories')
+        .select('id, name, slug')
+        .order('name', { ascending: true });
+
+      if (catData) {
+        setCategories(catData);
+      }
+
+      // Fetch products
+      const { data: prodData } = await supabase
         .from('products')
         .select('*, categories(name, slug)')
         .eq('is_active', true)
         .order('created_at', { ascending: false });
-      if (data && data.length > 0) {
-        setProducts(data);
-        // Build dynamic category list from products
-        const cats = Array.from(new Set(data.map((p: Product) => p.categories?.name).filter(Boolean))) as string[];
-        setCategories(['All', ...cats]);
+
+      if (prodData) {
+        setProducts(prodData);
       }
+
       setLoading(false);
     };
-    fetchProducts();
+    fetchData();
   }, []);
 
   // Sync search query from URL param
@@ -152,8 +174,15 @@ export default function ProductsClient() {
     setTimeout(() => setAddedId(null), 1800);
   };
 
+  const handleReset = () => {
+    setActiveCategory('All');
+    setActivePriceRange(0);
+    setActiveSort('Featured');
+    setSearchQuery('');
+  };
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <>
       {showLoginPrompt && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-foreground text-background px-5 py-3 rounded-full shadow-lg flex items-center gap-3 text-sm font-bold animate-fade-in">
           <Icon name="LockClosedIcon" size={16} />
@@ -208,206 +237,267 @@ export default function ProductsClient() {
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 h-full">
-          <div className="flex gap-8 h-full">
-            {/* Sidebar — fixed height, no scroll */}
-            <aside
-              className={`${sidebarOpen ? 'block' : 'hidden'} lg:block w-56 flex-shrink-0 py-6`}
-              style={{ position: 'sticky', top: '80px', height: 'calc(100vh - 80px)', overflowY: 'auto' }}
-            >
-              <div className="bg-card border border-border rounded-2xl shadow-warm h-full flex flex-col">
-                {/* Header */}
-                <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border flex-shrink-0">
-                  <h2 className="font-black text-foreground text-xs uppercase tracking-widest">Filters</h2>
-                  <button
-                    onClick={() => { setActiveCategory('All'); setActivePriceRange(0); setActiveSort('Featured'); setSearchQuery(''); }}
-                    className="text-xs text-primary hover:text-accent font-bold transition-colors"
-                  >
-                    Reset
-                  </button>
-                </div>
+      {/* Main content — fixed height so only product grid scrolls */}
+      <div
+        className="max-w-7xl mx-auto px-6 lg:px-10 flex gap-8"
+        style={{ height: 'calc(100vh - 80px - 160px)', minHeight: '500px' }}
+      >
+        {/* Sidebar — fixed, does NOT scroll with page */}
+        <aside
+          className={`${sidebarOpen ? 'block' : 'hidden'} lg:flex flex-col w-56 flex-shrink-0 py-6`}
+          style={{ position: 'sticky', top: 0, height: '100%', overflowY: 'auto' }}
+        >
+          <div className="bg-card border border-border rounded-2xl shadow-warm flex flex-col h-full">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border flex-shrink-0">
+              <h2 className="font-black text-foreground text-xs uppercase tracking-widest">Filters</h2>
+              <button
+                onClick={handleReset}
+                className="text-xs text-primary hover:text-accent font-bold transition-colors"
+              >
+                Reset
+              </button>
+            </div>
 
-                {/* Scrollable filter content */}
-                <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-4">
-                  {/* Category */}
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2">Category</p>
-                    <div className="flex flex-col gap-1">
-                      {categories.map((cat) => (
-                        <button
-                          key={cat}
-                          onClick={() => setActiveCategory(cat)}
-                          className={`text-left text-xs font-semibold px-3 py-2 rounded-lg transition-all ${activeCategory === cat ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+            {/* Scrollable filter content */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-1">
 
-                  {/* Price Range */}
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2">Price Range</p>
-                    <div className="flex flex-col gap-1">
-                      {priceRanges.map((range, i) => (
-                        <button
-                          key={range.label}
-                          onClick={() => setActivePriceRange(i)}
-                          className={`text-left text-xs font-semibold px-3 py-2 rounded-lg transition-all ${activePriceRange === i ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}
-                        >
-                          {range.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              {/* Category — collapsible, collapsed by default */}
+              <div className="border-b border-border pb-2 mb-1">
+                <button
+                  onClick={() => setCategoriesOpen(!categoriesOpen)}
+                  className="w-full flex items-center justify-between py-2 group"
+                >
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">
+                    Category
+                    {activeCategory !== 'All' && (
+                      <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 bg-primary text-primary-foreground rounded-full text-[8px] font-black">1</span>
+                    )}
+                  </p>
+                  <Icon
+                    name="ChevronDownIcon"
+                    size={12}
+                    className={`text-muted-foreground transition-transform duration-200 ${categoriesOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
 
-                  {/* Sort By */}
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2">Sort By</p>
-                    <div className="flex flex-col gap-1">
-                      {sortOptions.map((sort) => (
-                        <button
-                          key={sort}
-                          onClick={() => setActiveSort(sort)}
-                          className={`text-left text-xs font-semibold px-3 py-2 rounded-lg transition-all ${activeSort === sort ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}
-                        >
-                          {sort}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </aside>
-
-            {/* Product Grid */}
-            <div className="flex-1 min-w-0 py-6 overflow-y-auto" style={{ height: 'calc(100vh - 80px)' }}>
-              {/* Active filter chips */}
-              {(activeCategory !== 'All' || activePriceRange !== 0 || searchQuery) && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {searchQuery && (
-                    <span className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-3 py-1.5 rounded-full">
-                      "{searchQuery}"
-                      <button onClick={() => setSearchQuery('')} className="hover:text-accent">
-                        <Icon name="XMarkIcon" size={12} />
-                      </button>
-                    </span>
-                  )}
-                  {activeCategory !== 'All' && (
-                    <span className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-3 py-1.5 rounded-full">
+                {/* Active category chip shown when collapsed */}
+                {!categoriesOpen && activeCategory !== 'All' && (
+                  <div className="mb-2">
+                    <span className="inline-flex items-center gap-1 bg-primary/10 text-primary text-[10px] font-bold px-2 py-1 rounded-full">
                       {activeCategory}
-                      <button onClick={() => setActiveCategory('All')} className="hover:text-accent">
-                        <Icon name="XMarkIcon" size={12} />
+                      <button onClick={() => setActiveCategory('All')} className="hover:text-accent ml-0.5">
+                        <Icon name="XMarkIcon" size={10} />
                       </button>
                     </span>
-                  )}
-                  {activePriceRange !== 0 && (
-                    <span className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-3 py-1.5 rounded-full">
-                      {priceRanges[activePriceRange].label}
-                      <button onClick={() => setActivePriceRange(0)} className="hover:text-accent">
-                        <Icon name="XMarkIcon" size={12} />
-                      </button>
-                    </span>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
 
-              {loading ? (
-                <div className="flex items-center justify-center py-32">
-                  <svg className="animate-spin h-8 w-8 text-primary" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-32 text-center">
-                  <Icon name="MagnifyingGlassIcon" size={48} className="text-muted-foreground mb-4" />
-                  <h3 className="text-xl font-black text-foreground mb-2">No products found</h3>
-                  <p className="text-muted-foreground mb-6">Try adjusting your search or filters.</p>
-                  <button
-                    onClick={() => { setActiveCategory('All'); setActivePriceRange(0); setSearchQuery(''); }}
-                    className="btn-primary"
-                  >
-                    Clear All Filters
-                  </button>
-                </div>
-              ) : (
-                <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
-                  {filtered.map((product) => {
-                    const discount = product.original_price
-                      ? Math.round(((product.original_price - product.price) / product.original_price) * 100)
-                      : null;
-                    const displayImg = (product.images && product.images.length > 0) ? product.images[0] : product.image_url;
-
-                    return (
-                      <Link
-                        key={product.id}
-                        href={`/products/${product.slug}`}
-                        className="pgrid-card product-card group relative flex flex-col bg-card rounded-xl border border-border overflow-hidden shadow-warm hover:shadow-lg"
-                        style={{ transition: 'opacity 0.45s ease, transform 0.45s cubic-bezier(0.23,1,0.32,1), box-shadow 0.3s ease' }}
+                {/* Dropdown content */}
+                {categoriesOpen && (
+                  <div className="flex flex-col gap-0.5 mt-1 mb-2">
+                    <button
+                      onClick={() => setActiveCategory('All')}
+                      className={`text-left text-xs font-semibold px-3 py-2 rounded-lg transition-all ${activeCategory === 'All' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}
+                    >
+                      All
+                    </button>
+                    {categories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setActiveCategory(cat.name)}
+                        className={`text-left text-xs font-semibold px-3 py-2 rounded-lg transition-all ${activeCategory === cat.name ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}
                       >
-                        <div className="relative overflow-hidden aspect-[4/3] bg-secondary">
-                          <AppImage
-                            src={displayImg || '/assets/images/no_image.png'}
-                            alt={product.name}
-                            fill
-                            className="product-img object-cover"
-                            sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
-                          />
-                          <div className="product-card-overlay absolute inset-0 bg-foreground/20 flex items-end justify-center pb-3">
-                            <button
-                              onClick={(e) => handleAdd(product, e)}
-                              className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-full transition-all duration-200 shadow-lg ${addedId === product.id ? 'bg-green-500 text-white' : 'bg-card text-foreground hover:bg-primary hover:text-primary-foreground'}`}
-                            >
-                              {addedId === product.id ? '✓ Added!' : 'Add to Cart'}
-                            </button>
-                          </div>
-                          {product.badge && (
-                            <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full">
-                              {product.badge}
-                            </div>
-                          )}
-                          {discount && discount > 0 && (
-                            <div className="absolute top-2 right-2 bg-green-500 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full">
-                              -{discount}%
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-2.5 sm:p-3 flex flex-col gap-1 flex-1">
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{product.categories?.name || ''}</p>
-                          <h3 className="text-xs sm:text-sm font-bold text-foreground leading-tight line-clamp-2">{product.name}</h3>
-                          <div className="flex items-center gap-1">
-                            <div className="flex">
-                              {[...Array(5)].map((_, i) => (
-                                <Icon
-                                  key={i}
-                                  name="StarIcon"
-                                  variant={i < Math.floor(product.rating) ? 'solid' : 'outline'}
-                                  size={10}
-                                  className={i < Math.floor(product.rating) ? 'text-primary' : 'text-border'}
-                                />
-                              ))}
-                            </div>
-                            <span className="text-[10px] text-muted-foreground">({product.review_count})</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-auto pt-1">
-                            <span className="text-sm sm:text-base font-black text-foreground">{formatPrice(product.price)}</span>
-                            {product.original_price && (
-                              <span className="text-xs text-muted-foreground line-through">{formatPrice(product.original_price)}</span>
-                            )}
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
+                        {cat.name}
+                      </button>
+                    ))}
+                    {categories.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground px-3 py-2">No categories found</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Price Range — collapsible, open by default */}
+              <div className="border-b border-border pb-2 mb-1">
+                <button
+                  onClick={() => setPriceOpen(!priceOpen)}
+                  className="w-full flex items-center justify-between py-2 group"
+                >
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">Price Range</p>
+                  <Icon
+                    name="ChevronDownIcon"
+                    size={12}
+                    className={`text-muted-foreground transition-transform duration-200 ${priceOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {priceOpen && (
+                  <div className="flex flex-col gap-0.5 mt-1 mb-2">
+                    {priceRanges.map((range, i) => (
+                      <button
+                        key={range.label}
+                        onClick={() => setActivePriceRange(i)}
+                        className={`text-left text-xs font-semibold px-3 py-2 rounded-lg transition-all ${activePriceRange === i ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Sort By — collapsible, open by default */}
+              <div className="pb-2">
+                <button
+                  onClick={() => setSortOpen(!sortOpen)}
+                  className="w-full flex items-center justify-between py-2 group"
+                >
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">Sort By</p>
+                  <Icon
+                    name="ChevronDownIcon"
+                    size={12}
+                    className={`text-muted-foreground transition-transform duration-200 ${sortOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {sortOpen && (
+                  <div className="flex flex-col gap-0.5 mt-1">
+                    {sortOptions.map((sort) => (
+                      <button
+                        key={sort}
+                        onClick={() => setActiveSort(sort)}
+                        className={`text-left text-xs font-semibold px-3 py-2 rounded-lg transition-all ${activeSort === sort ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}
+                      >
+                        {sort}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+        </aside>
+
+        {/* Product Grid — only this scrolls */}
+        <div className="flex-1 min-w-0 py-6 overflow-y-auto">
+          {/* Active filter chips */}
+          {(activeCategory !== 'All' || activePriceRange !== 0 || searchQuery) && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {searchQuery && (
+                <span className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-3 py-1.5 rounded-full">
+                  &ldquo;{searchQuery}&rdquo;
+                  <button onClick={() => setSearchQuery('')} className="hover:text-accent">
+                    <Icon name="XMarkIcon" size={12} />
+                  </button>
+                </span>
+              )}
+              {activeCategory !== 'All' && (
+                <span className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-3 py-1.5 rounded-full">
+                  {activeCategory}
+                  <button onClick={() => setActiveCategory('All')} className="hover:text-accent">
+                    <Icon name="XMarkIcon" size={12} />
+                  </button>
+                </span>
+              )}
+              {activePriceRange !== 0 && (
+                <span className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-3 py-1.5 rounded-full">
+                  {priceRanges[activePriceRange].label}
+                  <button onClick={() => setActivePriceRange(0)} className="hover:text-accent">
+                    <Icon name="XMarkIcon" size={12} />
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex items-center justify-center py-32">
+              <svg className="animate-spin h-8 w-8 text-primary" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-32 text-center">
+              <Icon name="MagnifyingGlassIcon" size={48} className="text-muted-foreground mb-4" />
+              <h3 className="text-xl font-black text-foreground mb-2">No products found</h3>
+              <p className="text-muted-foreground mb-6">Try adjusting your search or filters.</p>
+              <button onClick={handleReset} className="btn-primary">
+                Clear All Filters
+              </button>
+            </div>
+          ) : (
+            <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
+              {filtered.map((product) => {
+                const discount = product.original_price
+                  ? Math.round(((product.original_price - product.price) / product.original_price) * 100)
+                  : null;
+                const displayImg = (product.images && product.images.length > 0) ? product.images[0] : product.image_url;
+
+                return (
+                  <Link
+                    key={product.id}
+                    href={`/products/${product.slug}`}
+                    className="pgrid-card product-card group relative flex flex-col bg-card rounded-xl border border-border overflow-hidden shadow-warm hover:shadow-lg"
+                    style={{ transition: 'opacity 0.45s ease, transform 0.45s cubic-bezier(0.23,1,0.32,1), box-shadow 0.3s ease' }}
+                  >
+                    <div className="relative overflow-hidden aspect-[4/3] bg-secondary">
+                      <AppImage
+                        src={displayImg || '/assets/images/no_image.png'}
+                        alt={product.name}
+                        fill
+                        className="product-img object-cover"
+                        sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                      />
+                      <div className="product-card-overlay absolute inset-0 bg-foreground/20 flex items-end justify-center pb-3">
+                        <button
+                          onClick={(e) => handleAdd(product, e)}
+                          className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-full transition-all duration-200 shadow-lg ${addedId === product.id ? 'bg-green-500 text-white' : 'bg-card text-foreground hover:bg-primary hover:text-primary-foreground'}`}
+                        >
+                          {addedId === product.id ? '✓ Added!' : 'Add to Cart'}
+                        </button>
+                      </div>
+                      {product.badge && (
+                        <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full">
+                          {product.badge}
+                        </div>
+                      )}
+                      {discount && discount > 0 && (
+                        <div className="absolute top-2 right-2 bg-green-500 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full">
+                          -{discount}%
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-2.5 sm:p-3 flex flex-col gap-1 flex-1">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{product.categories?.name || ''}</p>
+                      <h3 className="text-xs sm:text-sm font-bold text-foreground leading-tight line-clamp-2">{product.name}</h3>
+                      <div className="flex items-center gap-1">
+                        <div className="flex">
+                          {[...Array(5)].map((_, i) => (
+                            <Icon
+                              key={i}
+                              name="StarIcon"
+                              variant={i < Math.floor(product.rating) ? 'solid' : 'outline'}
+                              size={10}
+                              className={i < Math.floor(product.rating) ? 'text-primary' : 'text-border'}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">({product.review_count})</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-auto pt-1">
+                        <span className="text-sm sm:text-base font-black text-foreground">{formatPrice(product.price)}</span>
+                        {product.original_price && (
+                          <span className="text-xs text-muted-foreground line-through">{formatPrice(product.original_price)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
