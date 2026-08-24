@@ -90,7 +90,7 @@ export default function CategoryBento() {
               <span className="text-primary">Covered.</span>
             </h2>
           </div>
-          <Link href="/products" className="btn-ghost group self-start sm:self-auto">
+          <Link href="/collections" className="btn-ghost group self-start sm:self-auto">
             View All Collections
             <Icon name="ArrowRightIcon" size={16} className="group-hover:translate-x-1 transition-transform" />
           </Link>

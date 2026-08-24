@@ -19,13 +19,13 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
-  title: 'HomeVibe — Bold Home Goods That Transform Your Space',
-  description: 'Shop HomeVibe for furniture, décor, kitchenware, and everyday home goods. Bold design, real quality — find pieces that make your space feel intentional.',
+  title: 'Nyotas Homecare — Bold Home Goods That Transform Your Space',
+  description: 'Shop Nyotas Homecare for furniture, décor, kitchenware, and everyday home goods. Bold design, real quality — find pieces that make your space feel intentional.',
   icons: {
     icon: [{ url: '/favicon.ico', type: 'image/x-icon' }],
   },
   openGraph: {
-    title: 'HomeVibe — Bold Home Goods',
+    title: 'Nyotas Homecare — Bold Home Goods',
     description: 'Furniture, décor & kitchenware that transforms your space.',
     images: [{ url: '/assets/images/app_logo.png', width: 1200, height: 630 }],
   },

@@ -5,8 +5,8 @@ import ProductsClient from '@/app/products/components/ProductsClient';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Shop All Products — HomeVibe',
-  description: 'Browse 265+ home goods including furniture, décor, kitchenware, and bedroom essentials. Filter by category, price, and style. Free shipping on $75+.',
+  title: 'Shop All Products — Nyotas Homecare',
+  description: 'Browse home goods including furniture, décor, kitchenware, and bedroom essentials.',
   alternates: { canonical: '/products' },
 };
 

@@ -62,7 +62,7 @@ export default function Header() {
 
   const navLinks = [
     { label: 'Shop', href: '/products' },
-    { label: 'Collections', href: '/products' },
+    { label: 'Collections', href: '/collections' },
     { label: 'About', href: '/#about' },
     { label: 'Contact', href: '/#contact' },
   ];
@@ -84,7 +84,7 @@ export default function Header() {
               className="transition-transform duration-300 group-hover:scale-105"
             />
             <span className="text-xl font-black tracking-tight text-foreground">
-              Home<span className="text-primary">Vibe</span>
+              Nyotas<span className="text-primary"> Homecare</span>
             </span>
           </Link>
 
