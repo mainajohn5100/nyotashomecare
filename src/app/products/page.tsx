@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import ProductsClient from '@/app/products/components/ProductsClient';
@@ -15,7 +15,9 @@ export default function ProductsPage() {
     <>
       <Header />
       <main className="pt-20">
-        <ProductsClient />
+        <Suspense fallback={null}>
+          <ProductsClient />
+        </Suspense>
       </main>
       <Footer />
     </>
