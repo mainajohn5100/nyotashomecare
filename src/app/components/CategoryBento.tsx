@@ -97,10 +97,10 @@ export default function CategoryBento() {
         </div>
 
         {/* BENTO GRID
-           Row 1: [col-1..2: Living Room cs-2] [col-3: Kitchen cs-1]
-           Row 2: [col-1: Bedroom cs-1] [col-2..3: Décor Accents cs-2]
-           4/4 cards placed ✓
-          */}
+            Row 1: [col-1..2: Living Room cs-2] [col-3: Kitchen cs-1]
+            Row 2: [col-1: Bedroom cs-1] [col-2..3: Décor Accents cs-2]
+            4/4 cards placed ✓
+           */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {categories.map((cat) =>
           <Link
