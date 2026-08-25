@@ -2,6 +2,7 @@ import React from 'react';
 import type { Metadata, Viewport } from 'next';
 import { DM_Sans } from 'next/font/google';
 import { AuthProvider } from '@/contexts/AuthContext';
+import WhatsAppBubble from '@/components/WhatsAppBubble';
 
 import '../styles/tailwind.css';
 
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body className={dmSans.className}>
         <AuthProvider>
           {children}
+          <WhatsAppBubble />
         </AuthProvider>
 
         <script type="module" async src="https://static.rocket.new/rocket-web.js?_cfg=https%3A%2F%2Fhomevibe5370back.builtwithrocket.new&_be=https%3A%2F%2Fappanalytics.rocket.new&_v=0.1.20" />

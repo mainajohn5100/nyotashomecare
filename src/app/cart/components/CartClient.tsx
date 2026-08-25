@@ -1,9 +1,12 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import AppImage from '@/components/ui/AppImage';
 import Icon from '@/components/ui/AppIcon';
-import { getCart, saveCart, CartItem } from '@/lib/cart';
+import { getCart, saveCart, clearCart, CartItem } from '@/lib/cart';
+import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 const KES_RATE = 130;
 
@@ -18,12 +21,15 @@ const promoMap: Record<string, number> = {
 };
 
 export default function CartClient() {
+  const router = useRouter();
+  const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [mounted, setMounted] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null);
   const [promoError, setPromoError] = useState('');
-  const [checkoutDone, setCheckoutDone] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,6 +79,57 @@ export default function CartClient() {
   const discountAmount = appliedPromo ? subtotal * appliedPromo.discount / 100 : 0;
   const total = subtotal - discountAmount;
 
+  const handleCheckout = async () => {
+    if (!user) {
+      router.push('/login?next=/cart');
+      return;
+    }
+    if (items.length === 0) return;
+    setCheckingOut(true);
+    setCheckoutError('');
+    try {
+      const supabase = createClient();
+
+      // Create order
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user.id,
+          status: 'pending',
+          total_amount: total,
+          notes: appliedPromo ? `Promo: ${appliedPromo.code} (${appliedPromo.discount}% off)` : '',
+        })
+        .select('id')
+        .single();
+
+      if (orderError || !order) throw orderError || new Error('Failed to create order');
+
+      // Create order items
+      const orderItems = items.map((item) => ({
+        order_id: order.id,
+        product_id: item.id,
+        product_name: item.name,
+        product_image: item.img || '',
+        quantity: item.quantity,
+        unit_price: item.price,
+        total_price: item.price * item.quantity,
+      }));
+
+      const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+      if (itemsError) throw itemsError;
+
+      // Clear cart
+      clearCart();
+      window.dispatchEvent(new Event('cart-updated'));
+
+      // Redirect to confirmation page
+      router.push(`/order-confirmation?order_id=${order.id}`);
+    } catch (err: any) {
+      setCheckoutError(err?.message || 'Checkout failed. Please try again.');
+      setCheckingOut(false);
+    }
+  };
+
   if (!mounted) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
@@ -80,35 +137,6 @@ export default function CartClient() {
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
-      </div>
-    );
-  }
-
-  if (checkoutDone) {
-    return (
-      <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 text-center">
-        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-6">
-          <Icon name="CheckCircleIcon" size={40} className="text-green-500" variant="solid" />
-        </div>
-        <h1 className="text-3xl font-black text-foreground mb-3">Order Confirmed!</h1>
-        <p className="text-muted-foreground text-lg max-w-md mb-8">
-          Thanks for shopping with Nyotas Homecare. You'll receive a confirmation shortly.
-        </p>
-        <div className="bg-secondary border border-border rounded-2xl p-6 max-w-sm w-full mb-8 text-left">
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">Order Summary</p>
-          <div className="flex justify-between text-sm font-semibold text-foreground mb-1">
-            <span>Order Total</span>
-            <span className="font-black">{formatKES(total)}</span>
-          </div>
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Estimated Delivery</span>
-            <span>3–5 business days</span>
-          </div>
-        </div>
-        <Link href="/products" className="btn-primary">
-          Continue Shopping
-          <Icon name="ArrowRightIcon" size={18} />
-        </Link>
       </div>
     );
   }
@@ -279,13 +307,30 @@ export default function CartClient() {
                 <p className="text-xs text-muted-foreground mt-1">Tax included in prices</p>
               </div>
 
+              {checkoutError && (
+                <p className="text-sm text-red-600 font-medium mb-4 p-3 bg-red-50 rounded-xl">{checkoutError}</p>
+              )}
+
               {/* Checkout Button */}
               <button
-                onClick={() => setCheckoutDone(true)}
-                className="btn-primary w-full justify-center text-sm"
+                onClick={handleCheckout}
+                disabled={checkingOut}
+                className="btn-primary w-full justify-center text-sm disabled:opacity-60"
               >
-                <Icon name="LockClosedIcon" size={16} />
-                Secure Checkout
+                {checkingOut ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Placing Order…
+                  </>
+                ) : (
+                  <>
+                    <Icon name="LockClosedIcon" size={16} />
+                    {user ? 'Secure Checkout' : 'Sign In to Checkout'}
+                  </>
+                )}
               </button>
 
               {/* Trust signals */}

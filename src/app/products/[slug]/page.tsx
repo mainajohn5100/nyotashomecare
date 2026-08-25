@@ -36,6 +36,15 @@ interface CartItem {
   slug: string;
 }
 
+interface Review {
+  id: string;
+  rating: number;
+  title: string;
+  body: string;
+  created_at: string;
+  user_profiles?: { full_name: string } | null;
+}
+
 const KES_RATE = 130;
 function formatPrice(usd: number): string {
   return `KSh ${(usd * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
@@ -55,6 +64,35 @@ export default function ProductDetailPage() {
   const [activeImg, setActiveImg] = useState(0);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
+  // Reviews state
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, title: '', body: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [reviewSuccess, setReviewSuccess] = useState(false);
+  const [userHasReviewed, setUserHasReviewed] = useState(false);
+
+  const fetchReviews = useCallback(async (productId: string) => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from('reviews')
+      .select('id, rating, title, body, created_at, user_profiles(full_name)')
+      .eq('product_id', productId)
+      .eq('is_approved', true)
+      .order('created_at', { ascending: false });
+    if (data) setReviews(data);
+
+    if (user) {
+      const { data: existing } = await supabase
+        .from('reviews')
+        .select('id')
+        .eq('product_id', productId)
+        .eq('user_id', user.id)
+        .single();
+      setUserHasReviewed(!!existing);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!slug) return;
     const fetchProduct = async () => {
@@ -69,6 +107,7 @@ export default function ProductDetailPage() {
       if (data) {
         setProduct(data);
         setActiveImg(0);
+        fetchReviews(data.id);
         if (data.category_id) {
           const { data: related } = await supabase
             .from('products')
@@ -83,7 +122,7 @@ export default function ProductDetailPage() {
       setLoading(false);
     };
     fetchProduct();
-  }, [slug]);
+  }, [slug, fetchReviews]);
 
   const allImages = product
     ? [
@@ -122,9 +161,79 @@ export default function ProductDetailPage() {
     setTimeout(() => setAdded(false), 2000);
   }, [user, product, quantity, allImages]);
 
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if (!product) return;
+    setSubmittingReview(true);
+    setReviewError('');
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from('reviews').insert({
+        product_id: product.id,
+        user_id: user.id,
+        rating: reviewForm.rating,
+        title: reviewForm.title,
+        body: reviewForm.body,
+      });
+      if (error) throw error;
+      setReviewSuccess(true);
+      setUserHasReviewed(true);
+      setReviewForm({ rating: 5, title: '', body: '' });
+      fetchReviews(product.id);
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        setReviewError('You have already reviewed this product.');
+      } else {
+        setReviewError(err?.message || 'Failed to submit review. Please try again.');
+      }
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   const discount = product?.original_price
     ? Math.round(((product.original_price - product.price) / product.original_price) * 100)
     : null;
+
+  // JSON-LD structured data
+  const jsonLd = product ? {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description || `${product.name} - available at Nyotas Homecare`,
+    image: allImages.length > 0 ? allImages : [product.image_url],
+    sku: product.id,
+    brand: {
+      '@type': 'Brand',
+      name: 'Nyotas Homecare',
+    },
+    offers: {
+      '@type': 'Offer',
+      url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://homevibe5370.builtwithrocket.new'}/products/${product.slug}`,
+      priceCurrency: 'KES',
+      price: (product.price * KES_RATE).toFixed(0),
+      availability: product.stock_quantity > 0
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/OutOfStock',
+      seller: {
+        '@type': 'Organization',
+        name: 'Nyotas Homecare',
+      },
+    },
+    ...(product.review_count > 0 && {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: product.rating,
+        reviewCount: product.review_count,
+        bestRating: 5,
+        worstRating: 1,
+      },
+    }),
+  } : null;
 
   if (loading) {
     return (
@@ -160,6 +269,12 @@ export default function ProductDetailPage() {
 
   return (
     <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
       <Header />
       <main className="min-h-screen bg-background pt-24 pb-16">
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
@@ -351,6 +466,159 @@ export default function ProductDetailPage() {
                   <span className="text-sm font-bold text-foreground">{detail.value}</span>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Reviews Section */}
+          <div className="mb-16">
+            <h2 className="text-2xl font-black text-foreground mb-8">
+              Customer <span className="text-primary">Reviews</span>
+              {reviews.length > 0 && <span className="text-muted-foreground font-medium text-lg ml-2">({reviews.length})</span>}
+            </h2>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+              {/* Review Form */}
+              <div className="lg:col-span-5">
+                <div className="bg-card border border-border rounded-3xl p-6 shadow-warm">
+                  <h3 className="font-black text-foreground mb-4">
+                    {userHasReviewed ? 'Your Review' : 'Write a Review'}
+                  </h3>
+
+                  {!user ? (
+                    <div className="text-center py-6">
+                      <Icon name="UserCircleIcon" size={40} className="text-muted-foreground mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground mb-4">Sign in to leave a review</p>
+                      <Link href="/login" className="btn-primary !text-sm !px-6 !py-2.5">
+                        Sign In
+                      </Link>
+                    </div>
+                  ) : reviewSuccess || userHasReviewed ? (
+                    <div className="text-center py-6">
+                      <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                        <Icon name="CheckCircleIcon" size={24} className="text-green-500" variant="solid" />
+                      </div>
+                      <p className="font-bold text-foreground mb-1">Review Submitted!</p>
+                      <p className="text-sm text-muted-foreground">Thank you for your feedback.</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSubmitReview} className="space-y-4">
+                      {/* Star Rating */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Your Rating</label>
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setReviewForm((f) => ({ ...f, rating: star }))}
+                              className="transition-transform hover:scale-110"
+                            >
+                              <Icon
+                                name="StarIcon"
+                                variant={star <= reviewForm.rating ? 'solid' : 'outline'}
+                                size={28}
+                                className={star <= reviewForm.rating ? 'text-primary' : 'text-border'}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">Review Title</label>
+                        <input
+                          type="text"
+                          value={reviewForm.title}
+                          onChange={(e) => setReviewForm((f) => ({ ...f, title: e.target.value }))}
+                          placeholder="Summarize your experience"
+                          className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">Your Review</label>
+                        <textarea
+                          value={reviewForm.body}
+                          onChange={(e) => setReviewForm((f) => ({ ...f, body: e.target.value }))}
+                          placeholder="Share your thoughts about this product..."
+                          rows={4}
+                          className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                        />
+                      </div>
+
+                      {reviewError && (
+                        <p className="text-sm text-red-600 font-medium">{reviewError}</p>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={submittingReview}
+                        className="btn-primary w-full justify-center !text-sm disabled:opacity-60"
+                      >
+                        {submittingReview ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Submitting…
+                          </>
+                        ) : (
+                          <>
+                            <Icon name="StarIcon" size={16} variant="solid" />
+                            Submit Review
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </div>
+
+              {/* Reviews List */}
+              <div className="lg:col-span-7">
+                {reviews.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center bg-secondary rounded-3xl border border-border">
+                    <Icon name="StarIcon" size={40} className="text-muted-foreground mb-3" />
+                    <p className="font-bold text-foreground mb-1">No reviews yet</p>
+                    <p className="text-sm text-muted-foreground">Be the first to review this product!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {reviews.map((review) => (
+                      <div key={review.id} className="bg-card border border-border rounded-2xl p-5 shadow-warm">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <p className="font-bold text-foreground text-sm">
+                              {review.user_profiles?.full_name || 'Anonymous'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(review.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
+                            </p>
+                          </div>
+                          <div className="flex gap-0.5">
+                            {[...Array(5)].map((_, i) => (
+                              <Icon
+                                key={i}
+                                name="StarIcon"
+                                variant={i < review.rating ? 'solid' : 'outline'}
+                                size={14}
+                                className={i < review.rating ? 'text-primary' : 'text-border'}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        {review.title && (
+                          <p className="font-bold text-foreground text-sm mb-1">{review.title}</p>
+                        )}
+                        {review.body && (
+                          <p className="text-sm text-muted-foreground leading-relaxed">{review.body}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
