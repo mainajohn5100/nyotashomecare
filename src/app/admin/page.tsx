@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,22 +10,23 @@ import AppImage from '@/components/ui/AppImage';
 import Icon from '@/components/ui/AppIcon';
 
 type AdminTab = 'overview' | 'products' | 'categories' | 'orders';
-type Currency = 'USD' | 'KES';
-const KES_RATE = 130;
 
-function formatPrice(amount: number, currency: Currency): string {
-  if (currency === 'KES') {
-    return `KES ${(amount * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
-  }
-  return `$${amount.toFixed(2)}`;
+const KES_RATE = 130;
+function formatPrice(amount: number): string {
+  return `KSh ${(amount * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+}
+function formatKES(amount: number): string {
+  return `KSh ${amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
 }
 
 interface Product {
   id: string;
   name: string;
+  slug: string;
   price: number;
   original_price: number | null;
   image_url: string;
+  images: string[] | null;
   badge: string;
   rating: number;
   review_count: number;
@@ -33,6 +34,7 @@ interface Product {
   is_active: boolean;
   is_featured: boolean;
   category_id: string | null;
+  description: string;
   categories?: { name: string } | null;
 }
 
@@ -64,6 +66,7 @@ const statusColors: Record<string, string> = {
 };
 
 const ORDER_STATUSES = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+const MAX_IMAGES = 8;
 
 export default function AdminPage() {
   const router = useRouter();
@@ -71,21 +74,31 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingRole, setCheckingRole] = useState(true);
-  const [currency, setCurrency] = useState<Currency>('USD');
 
-  // Data states
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
-  // Product form
+  // Search state
+  const [productSearch, setProductSearch] = useState('');
+  const [orderSearch, setOrderSearch] = useState('');
+
+  // Low stock threshold
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
+
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [productForm, setProductForm] = useState({ name: '', price: '', original_price: '', image_url: '', badge: '', stock_quantity: '', category_id: '', is_featured: false, is_active: true, description: '' });
+  const [productForm, setProductForm] = useState({
+    name: '', price: '', original_price: '', badge: '',
+    stock_quantity: '0', category_id: '', is_featured: false,
+    is_active: true, description: '',
+  });
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [productSaving, setProductSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Category form
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '', description: '', sort_order: '0', is_active: true });
@@ -93,7 +106,6 @@ export default function AdminPage() {
 
   const [formError, setFormError] = useState('');
 
-  // Check admin role
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace('/login?next=/admin');
@@ -127,7 +139,10 @@ export default function AdminPage() {
 
   const fetchOrders = useCallback(async () => {
     const supabase = createClient();
-    const { data } = await supabase.from('orders').select('*, user_profiles(full_name, email), order_items(id, product_name, quantity, total_price)').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('orders')
+      .select('*, user_profiles(full_name, email), order_items(id, product_name, quantity, total_price)')
+      .order('created_at', { ascending: false });
     if (data) setOrders(data);
   }, []);
 
@@ -137,7 +152,52 @@ export default function AdminPage() {
     Promise.all([fetchProducts(), fetchCategories(), fetchOrders()]).finally(() => setLoadingData(false));
   }, [isAdmin, fetchProducts, fetchCategories, fetchOrders]);
 
-  // Product CRUD
+  // Real-time orders subscription
+  useEffect(() => {
+    if (!isAdmin) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel('orders-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [isAdmin, fetchOrders]);
+
+  const handleImageUpload = async (files: FileList) => {
+    if (!files.length) return;
+    const remaining = MAX_IMAGES - uploadedImages.length;
+    if (remaining <= 0) {
+      setFormError(`Maximum ${MAX_IMAGES} images allowed`);
+      return;
+    }
+    const toUpload = Array.from(files).slice(0, remaining);
+    setUploading(true);
+    setFormError('');
+    try {
+      const supabase = createClient();
+      const newUrls: string[] = [];
+      for (const file of toUpload) {
+        const ext = file.name.split('.').pop();
+        const path = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error } = await supabase.storage.from('product-images').upload(path, file, { upsert: false });
+        if (error) throw error;
+        const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(path);
+        newUrls.push(urlData.publicUrl);
+      }
+      setUploadedImages((prev) => [...prev, ...newUrls]);
+    } catch (err: any) {
+      setFormError(err.message || 'Image upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImage = (idx: number) => {
+    setUploadedImages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const openProductForm = (product?: Product) => {
     setFormError('');
     if (product) {
@@ -145,14 +205,18 @@ export default function AdminPage() {
       setProductForm({
         name: product.name, price: String(product.price),
         original_price: product.original_price ? String(product.original_price) : '',
-        image_url: product.image_url, badge: product.badge || '',
-        stock_quantity: String(product.stock_quantity),
+        badge: product.badge || '', stock_quantity: String(product.stock_quantity),
         category_id: product.category_id || '', is_featured: product.is_featured,
-        is_active: product.is_active, description: '',
+        is_active: product.is_active, description: product.description || '',
       });
+      const imgs: string[] = [];
+      if (product.images && product.images.length > 0) imgs.push(...product.images);
+      else if (product.image_url) imgs.push(product.image_url);
+      setUploadedImages(imgs);
     } else {
       setEditingProduct(null);
-      setProductForm({ name: '', price: '', original_price: '', image_url: '', badge: '', stock_quantity: '0', category_id: '', is_featured: false, is_active: true, description: '' });
+      setProductForm({ name: '', price: '', original_price: '', badge: '', stock_quantity: '0', category_id: '', is_featured: false, is_active: true, description: '' });
+      setUploadedImages([]);
     }
     setShowProductForm(true);
   };
@@ -165,13 +229,17 @@ export default function AdminPage() {
       const supabase = createClient();
       const slug = productForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now();
       const payload = {
-        name: productForm.name, slug,
+        name: productForm.name,
+        slug: editingProduct ? editingProduct.slug : slug,
         price: parseFloat(productForm.price),
         original_price: productForm.original_price ? parseFloat(productForm.original_price) : null,
-        image_url: productForm.image_url, badge: productForm.badge,
+        image_url: uploadedImages[0] || '',
+        images: uploadedImages,
+        badge: productForm.badge,
         stock_quantity: parseInt(productForm.stock_quantity) || 0,
         category_id: productForm.category_id || null,
-        is_featured: productForm.is_featured, is_active: productForm.is_active,
+        is_featured: productForm.is_featured,
+        is_active: productForm.is_active,
         description: productForm.description,
       };
       if (editingProduct) {
@@ -183,6 +251,7 @@ export default function AdminPage() {
       }
       await fetchProducts();
       setShowProductForm(false);
+      setUploadedImages([]);
     } catch (err: any) {
       setFormError(err.message || 'Failed to save product');
     } finally {
@@ -197,7 +266,6 @@ export default function AdminPage() {
     await fetchProducts();
   };
 
-  // Category CRUD
   const openCategoryForm = (cat?: Category) => {
     setFormError('');
     if (cat) {
@@ -265,50 +333,56 @@ export default function AdminPage() {
 
   const totalRevenue = orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.total_amount, 0);
 
+  // Daily sales: orders created today (not cancelled)
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dailySalesOrders = orders.filter(o => o.status !== 'cancelled' && o.created_at?.slice(0, 10) === todayStr);
+  const dailySalesAmount = dailySalesOrders.reduce((sum, o) => sum + o.total_amount, 0);
+
+  // Total stock valuation: sum of (price * stock_quantity) for all active products
+  const totalStockValuation = products
+    .filter(p => p.is_active)
+    .reduce((sum, p) => sum + p.price * KES_RATE * p.stock_quantity, 0);
+
+  // Low stock products
+  const lowStockProducts = products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= lowStockThreshold);
+
+  // Filtered products for search
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+    (p.categories?.name || '').toLowerCase().includes(productSearch.toLowerCase()) ||
+    (p.badge || '').toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  // Filtered orders for search
+  const filteredOrders = orders.filter(o =>
+    o.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+    (o.user_profiles?.full_name || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+    (o.user_profiles?.email || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+    o.status.toLowerCase().includes(orderSearch.toLowerCase())
+  );
+
   return (
     <>
       <Header />
       <main className="min-h-screen bg-background pt-24 pb-16">
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          {/* Page Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-black text-foreground">Admin Dashboard</h1>
-              <p className="text-muted-foreground mt-1">Manage your store</p>
+              <p className="text-muted-foreground mt-1">Manage your store — Nyotas Homecare</p>
             </div>
-            <div className="flex items-center gap-3">
-              {/* Currency Toggle */}
-              <div className="flex items-center gap-1 bg-secondary border border-border rounded-full p-1">
-                {(['USD', 'KES'] as Currency[]).map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setCurrency(c)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${
-                      currency === c
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-              <Link href="/profile" className="btn-secondary !px-5 !py-2.5 !text-xs">
-                <Icon name="UserIcon" size={16} />
-                My Profile
-              </Link>
-            </div>
+            <Link href="/profile" className="btn-secondary !px-5 !py-2.5 !text-xs">
+              <Icon name="UserIcon" size={16} />
+              My Profile
+            </Link>
           </div>
 
-          {/* Tabs */}
           <div className="flex gap-1 bg-secondary rounded-full p-1 w-fit mb-8 border border-border overflow-x-auto">
             {(['overview', 'products', 'categories', 'orders'] as AdminTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-5 py-2 rounded-full text-sm font-bold capitalize whitespace-nowrap transition-all ${
-                  activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}
+                className={`px-5 py-2 rounded-full text-sm font-bold capitalize whitespace-nowrap transition-all ${activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 {tab}
               </button>
@@ -324,15 +398,17 @@ export default function AdminPage() {
             </div>
           ) : (
             <>
-              {/* Overview Tab */}
               {activeTab === 'overview' && (
                 <div>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                  {/* Stats Cards */}
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                     {[
                       { label: 'Total Products', value: products.length, icon: 'ArchiveBoxIcon', color: 'text-blue-600' },
                       { label: 'Categories', value: categories.length, icon: 'TagIcon', color: 'text-purple-600' },
                       { label: 'Total Orders', value: orders.length, icon: 'ShoppingBagIcon', color: 'text-orange-600' },
-                      { label: 'Revenue', value: formatPrice(totalRevenue, currency), icon: 'CurrencyDollarIcon', color: 'text-green-600' },
+                      { label: 'Total Revenue', value: formatKES(totalRevenue * KES_RATE), icon: 'BanknotesIcon', color: 'text-green-600' },
+                      { label: "Today's Sales", value: formatKES(dailySalesAmount * KES_RATE), icon: 'CalendarDaysIcon', color: 'text-teal-600' },
+                      { label: 'Stock Valuation', value: formatKES(totalStockValuation), icon: 'CubeIcon', color: 'text-indigo-600' },
                     ].map((stat) => (
                       <div key={stat.label} className="bg-card border border-border rounded-2xl p-5 shadow-warm">
                         <Icon name={stat.icon as any} size={24} className={`${stat.color} mb-3`} />
@@ -341,11 +417,31 @@ export default function AdminPage() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Low Stock Alert */}
+                  {lowStockProducts.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Icon name="ExclamationTriangleIcon" size={20} className="text-amber-600" />
+                        <h3 className="font-black text-amber-800">Low Stock Alert ({lowStockProducts.length} products)</h3>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {lowStockProducts.map(p => (
+                          <span key={p.id} className="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1 rounded-full">
+                            {p.name} — {p.stock_quantity} left
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-card border border-border rounded-2xl p-6 shadow-warm">
                       <h3 className="font-black text-foreground mb-4">Recent Orders</h3>
                       <div className="space-y-3">
-                        {orders.slice(0, 5).map((order) => (
+                        {orders.slice(0, 5).length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No orders yet.</p>
+                        ) : orders.slice(0, 5).map((order) => (
                           <div key={order.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                             <div>
                               <p className="text-sm font-bold text-foreground">#{order.id.slice(0, 8).toUpperCase()}</p>
@@ -353,7 +449,7 @@ export default function AdminPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className={`text-xs font-bold px-2 py-1 rounded-full capitalize ${statusColors[order.status] || ''}`}>{order.status}</span>
-                              <span className="text-sm font-black text-foreground">{formatPrice(order.total_amount, currency)}</span>
+                              <span className="text-sm font-black text-foreground">{formatKES(order.total_amount)}</span>
                             </div>
                           </div>
                         ))}
@@ -380,28 +476,135 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Products Tab */}
               {activeTab === 'products' && (
                 <div>
-                  <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-xl font-black text-foreground">Products ({products.length})</h2>
-                    <button onClick={() => openProductForm()} className="btn-primary !px-5 !py-2.5 !text-xs">
-                      <Icon name="PlusIcon" size={16} />
-                      Add Product
-                    </button>
+                  {/* Low Stock Threshold Setting */}
+                  <div className="bg-card border border-border rounded-2xl p-5 mb-5 shadow-warm flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex items-center gap-2 flex-1">
+                      <Icon name="ExclamationTriangleIcon" size={18} className="text-amber-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-black text-foreground">Low Stock Threshold</p>
+                        <p className="text-xs text-muted-foreground">Products at or below this quantity will be flagged as low stock</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min={1}
+                        value={lowStockThreshold}
+                        onChange={(e) => setLowStockThreshold(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-24 px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                      <span className="text-sm text-muted-foreground font-medium">units</span>
+                    </div>
+                  </div>
+
+                  {/* Low Stock Products */}
+                  {lowStockProducts.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon name="ExclamationTriangleIcon" size={16} className="text-amber-600" />
+                        <span className="text-sm font-black text-amber-800">
+                          {lowStockProducts.length} product{lowStockProducts.length !== 1 ? 's' : ''} nearing end of stock
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {lowStockProducts.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => openProductForm(p)}
+                            className="text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1 rounded-full transition-colors"
+                          >
+                            {p.name} — {p.stock_quantity} left
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                    <h2 className="text-xl font-black text-foreground">Products ({filteredProducts.length})</h2>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      {/* Search */}
+                      <div className="relative flex-1 sm:flex-none">
+                        <Icon name="MagnifyingGlassIcon" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          placeholder="Search products…"
+                          className="w-full sm:w-56 pl-9 pr-4 py-2.5 rounded-full border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </div>
+                      <button onClick={() => openProductForm()} className="btn-primary !px-5 !py-2.5 !text-xs whitespace-nowrap">
+                        <Icon name="PlusIcon" size={16} />
+                        Add Product
+                      </button>
+                    </div>
                   </div>
 
                   {showProductForm && (
                     <div className="bg-card border border-border rounded-2xl p-6 mb-6 shadow-warm">
                       <h3 className="font-black text-foreground mb-4">{editingProduct ? 'Edit Product' : 'New Product'}</h3>
                       {formError && <p className="text-red-600 text-sm mb-4">{formError}</p>}
+
+                      {/* Image Upload */}
+                      <div className="mb-5">
+                        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">
+                          Product Images ({uploadedImages.length}/{MAX_IMAGES})
+                        </label>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {uploadedImages.map((url, idx) => (
+                            <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-border group">
+                              <AppImage src={url} alt={`Product image ${idx + 1}`} width={80} height={80} className="object-cover w-full h-full" />
+                              <button
+                                onClick={() => removeImage(idx)}
+                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                              >
+                                <Icon name="XMarkIcon" size={16} className="text-white" />
+                              </button>
+                              {idx === 0 && (
+                                <span className="absolute bottom-0 left-0 right-0 bg-primary text-primary-foreground text-[8px] font-black text-center py-0.5">MAIN</span>
+                              )}
+                            </div>
+                          ))}
+                          {uploadedImages.length < MAX_IMAGES && (
+                            <button
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={uploading}
+                              className="w-20 h-20 rounded-xl border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                            >
+                              {uploading ? (
+                                <svg className="animate-spin h-5 w-5 text-primary" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                              ) : (
+                                <>
+                                  <Icon name="PlusIcon" size={20} className="text-muted-foreground" />
+                                  <span className="text-[9px] text-muted-foreground font-bold">Upload</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => e.target.files && handleImageUpload(e.target.files)}
+                        />
+                        <p className="text-xs text-muted-foreground">Upload up to {MAX_IMAGES} images. First image is the main product image. JPG, PNG, WebP supported.</p>
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                         {[
                           { label: 'Product Name *', key: 'name', type: 'text', placeholder: 'e.g. Linen Cloud Sofa' },
-                          { label: 'Price *', key: 'price', type: 'number', placeholder: '0.00' },
-                          { label: 'Original Price', key: 'original_price', type: 'number', placeholder: '0.00' },
+                          { label: 'Price (KES) *', key: 'price', type: 'number', placeholder: '0.00' },
+                          { label: 'Original Price (KES)', key: 'original_price', type: 'number', placeholder: '0.00' },
                           { label: 'Stock Quantity', key: 'stock_quantity', type: 'number', placeholder: '0' },
-                          { label: 'Image URL', key: 'image_url', type: 'text', placeholder: 'https://...' },
                           { label: 'Badge', key: 'badge', type: 'text', placeholder: 'e.g. New, Best Seller' },
                         ].map((field) => (
                           <div key={field.key}>
@@ -426,16 +629,16 @@ export default function AdminPage() {
                             {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                           </select>
                         </div>
-                        <div>
-                          <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Description</label>
-                          <input
-                            type="text"
-                            value={productForm.description}
-                            onChange={(e) => setProductForm((prev) => ({ ...prev, description: e.target.value }))}
-                            placeholder="Short product description"
-                            className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                          />
-                        </div>
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Description</label>
+                        <textarea
+                          value={productForm.description}
+                          onChange={(e) => setProductForm((prev) => ({ ...prev, description: e.target.value }))}
+                          placeholder="Product description..."
+                          rows={3}
+                          className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                        />
                       </div>
                       <div className="flex items-center gap-6 mb-5">
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -448,8 +651,8 @@ export default function AdminPage() {
                         </label>
                       </div>
                       <div className="flex gap-3">
-                        <button onClick={() => setShowProductForm(false)} className="px-5 py-2.5 rounded-full border border-border text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-                        <button onClick={saveProduct} disabled={productSaving} className="btn-primary !px-6 !py-2.5 !text-sm disabled:opacity-60">
+                        <button onClick={() => { setShowProductForm(false); setUploadedImages([]); }} className="px-5 py-2.5 rounded-full border border-border text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+                        <button onClick={saveProduct} disabled={productSaving || uploading} className="btn-primary !px-6 !py-2.5 !text-sm disabled:opacity-60">
                           {productSaving ? 'Saving…' : editingProduct ? 'Update Product' : 'Add Product'}
                         </button>
                       </div>
@@ -470,42 +673,59 @@ export default function AdminPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {products.map((product) => (
-                            <tr key={product.id} className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors">
-                              <td className="px-5 py-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-lg overflow-hidden bg-secondary flex-shrink-0">
-                                    <AppImage src={product.image_url} alt={product.name} width={40} height={40} className="object-cover w-full h-full" />
-                                  </div>
-                                  <div>
-                                    <p className="font-bold text-foreground text-sm">{product.name}</p>
-                                    {product.badge && <span className="text-xs text-primary font-bold">{product.badge}</span>}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-5 py-4 text-sm text-muted-foreground">{product.categories?.name || '—'}</td>
-                              <td className="px-5 py-4">
-                                <p className="font-bold text-foreground text-sm">{formatPrice(product.price, currency)}</p>
-                                {product.original_price && <p className="text-xs text-muted-foreground line-through">{formatPrice(product.original_price, currency)}</p>}
-                              </td>
-                              <td className="px-5 py-4 text-sm text-foreground font-bold">{product.stock_quantity}</td>
-                              <td className="px-5 py-4">
-                                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${product.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                  {product.is_active ? 'Active' : 'Inactive'}
-                                </span>
-                              </td>
-                              <td className="px-5 py-4">
-                                <div className="flex items-center justify-end gap-2">
-                                  <button onClick={() => openProductForm(product)} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
-                                    <Icon name="PencilIcon" size={14} />
-                                  </button>
-                                  <button onClick={() => deleteProduct(product.id)} className="p-2 rounded-lg hover:bg-red-50 transition-colors text-muted-foreground hover:text-red-600">
-                                    <Icon name="TrashIcon" size={14} />
-                                  </button>
-                                </div>
+                          {filteredProducts.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="px-5 py-10 text-center text-muted-foreground text-sm">
+                                {productSearch ? 'No products match your search.' : 'No products yet.'}
                               </td>
                             </tr>
-                          ))}
+                          ) : filteredProducts.map((product) => {
+                            const displayImg = (product.images && product.images.length > 0) ? product.images[0] : product.image_url;
+                            const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= lowStockThreshold;
+                            return (
+                              <tr key={product.id} className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors">
+                                <td className="px-5 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-secondary flex-shrink-0">
+                                      <AppImage src={displayImg || '/assets/images/no_image.png'} alt={product.name} width={40} height={40} className="object-cover w-full h-full" />
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-foreground text-sm">{product.name}</p>
+                                      {product.badge && <span className="text-xs text-primary font-bold">{product.badge}</span>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-5 py-4 text-sm text-muted-foreground">{product.categories?.name || '—'}</td>
+                                <td className="px-5 py-4">
+                                  <p className="font-bold text-foreground text-sm">{formatPrice(product.price)}</p>
+                                  {product.original_price && <p className="text-xs text-muted-foreground line-through">{formatPrice(product.original_price)}</p>}
+                                </td>
+                                <td className="px-5 py-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm text-foreground font-bold">{product.stock_quantity}</span>
+                                    {isLowStock && (
+                                      <span className="text-[10px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">LOW</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${product.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    {product.is_active ? 'Active' : 'Inactive'}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => openProductForm(product)} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
+                                      <Icon name="PencilIcon" size={14} />
+                                    </button>
+                                    <button onClick={() => deleteProduct(product.id)} className="p-2 rounded-lg hover:bg-red-50 transition-colors text-muted-foreground hover:text-red-600">
+                                      <Icon name="TrashIcon" size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -513,7 +733,6 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Categories Tab */}
               {activeTab === 'categories' && (
                 <div>
                   <div className="flex items-center justify-between mb-5">
@@ -587,45 +806,63 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Orders Tab */}
               {activeTab === 'orders' && (
                 <div>
-                  <h2 className="text-xl font-black text-foreground mb-5">Orders ({orders.length})</h2>
-                  <div className="space-y-4">
-                    {orders.map((order) => (
-                      <div key={order.id} className="bg-card border border-border rounded-2xl p-6 shadow-warm">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                          <div>
-                            <p className="font-black text-foreground">#{order.id.slice(0, 8).toUpperCase()}</p>
-                            <p className="text-sm text-muted-foreground">{order.user_profiles?.full_name || 'Guest'} · {order.user_profiles?.email}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <select
-                              value={order.status}
-                              onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                              className="px-3 py-2 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                            >
-                              {ORDER_STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                            </select>
-                            <span className="text-lg font-black text-foreground">{formatPrice(order.total_amount, currency)}</span>
-                          </div>
-                        </div>
-                        {order.order_items && order.order_items.length > 0 && (
-                          <div className="border-t border-border pt-3 space-y-2">
-                            {order.order_items.map((item) => (
-                              <div key={item.id} className="flex items-center justify-between text-sm">
-                                <span className="text-foreground">{item.product_name} × {item.quantity}</span>
-                                <span className="font-bold text-foreground">{formatPrice(item.total_price, currency)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                    <h2 className="text-xl font-black text-foreground">Orders ({filteredOrders.length})</h2>
+                    <div className="relative">
+                      <Icon name="MagnifyingGlassIcon" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={orderSearch}
+                        onChange={(e) => setOrderSearch(e.target.value)}
+                        placeholder="Search by name, email, status…"
+                        className="w-full sm:w-64 pl-9 pr-4 py-2.5 rounded-full border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                    </div>
                   </div>
+                  {filteredOrders.length === 0 ? (
+                    <div className="bg-card border border-border rounded-2xl p-10 text-center">
+                      <Icon name="ShoppingBagIcon" size={40} className="text-muted-foreground mx-auto mb-3" />
+                      <p className="text-muted-foreground text-sm">{orderSearch ? 'No orders match your search.' : 'No orders yet.'}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredOrders.map((order) => (
+                        <div key={order.id} className="bg-card border border-border rounded-2xl p-6 shadow-warm">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                            <div>
+                              <p className="font-black text-foreground">#{order.id.slice(0, 8).toUpperCase()}</p>
+                              <p className="text-sm text-muted-foreground">{order.user_profiles?.full_name || 'Guest'} · {order.user_profiles?.email}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {new Date(order.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <select
+                                value={order.status}
+                                onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                                className="px-3 py-2 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                              >
+                                {ORDER_STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                              </select>
+                              <span className="text-lg font-black text-foreground">{formatKES(order.total_amount)}</span>
+                            </div>
+                          </div>
+                          {order.order_items && order.order_items.length > 0 && (
+                            <div className="border-t border-border pt-3 space-y-2">
+                              {order.order_items.map((item) => (
+                                <div key={item.id} className="flex items-center justify-between text-sm">
+                                  <span className="text-foreground">{item.product_name} × {item.quantity}</span>
+                                  <span className="font-bold text-foreground">{formatKES(item.total_price)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </>

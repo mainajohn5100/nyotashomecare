@@ -90,17 +90,17 @@ export default function CategoryBento() {
               <span className="text-primary">Covered.</span>
             </h2>
           </div>
-          <Link href="/products" className="btn-ghost group self-start sm:self-auto">
+          <Link href="/collections" className="btn-ghost group self-start sm:self-auto">
             View All Collections
             <Icon name="ArrowRightIcon" size={16} className="group-hover:translate-x-1 transition-transform" />
           </Link>
         </div>
 
         {/* BENTO GRID
-           Row 1: [col-1..2: Living Room cs-2] [col-3: Kitchen cs-1]
-           Row 2: [col-1: Bedroom cs-1] [col-2..3: Décor Accents cs-2]
-           4/4 cards placed ✓
-          */}
+            Row 1: [col-1..2: Living Room cs-2] [col-3: Kitchen cs-1]
+            Row 2: [col-1: Bedroom cs-1] [col-2..3: Décor Accents cs-2]
+            4/4 cards placed ✓
+           */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {categories.map((cat) =>
           <Link

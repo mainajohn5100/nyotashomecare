@@ -16,8 +16,32 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
+  const organizationJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Nyotas Homecare',
+    url: process.env.NEXT_PUBLIC_SITE_URL || 'https://homevibe5370.builtwithrocket.new',
+    logo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://homevibe5370.builtwithrocket.new'}/assets/images/app_logo.png`,
+    description: 'Bold home goods — furniture, décor, kitchenware, and everyday home essentials in Kenya.',
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: 'Nairobi',
+      addressCountry: 'KE',
+    },
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer service',
+      availableLanguage: 'English',
+    },
+    sameAs: [],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+      />
       <Header />
       <main>
         <HeroSection />

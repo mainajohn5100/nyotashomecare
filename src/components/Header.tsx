@@ -1,11 +1,12 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AppLogo from '@/components/ui/AppLogo';
 import Icon from '@/components/ui/AppIcon';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/lib/supabase/client';
+import { getCartCount } from '@/lib/cart';
 
 interface CartBadgeProps {
   count: number;
@@ -23,10 +24,13 @@ function CartBadge({ count }: CartBadgeProps) {
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [cartCount] = useState(2);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
+  const [cartCount, setCartCount] = useState(0);
   const [userRole, setUserRole] = useState<string | null>(null);
   const { user, loading: authLoading, signOut } = useAuth();
   const router = useRouter();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -53,6 +57,33 @@ export default function Header() {
     fetchRole();
   }, [user]);
 
+  // Sync cart count from localStorage
+  useEffect(() => {
+    const syncCount = () => setCartCount(getCartCount());
+    syncCount();
+    window.addEventListener('cart-updated', syncCount);
+    window.addEventListener('storage', syncCount);
+    return () => {
+      window.removeEventListener('cart-updated', syncCount);
+      window.removeEventListener('storage', syncCount);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (searchOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [searchOpen]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchValue.trim()) {
+      router.push(`/products?q=${encodeURIComponent(searchValue.trim())}`);
+      setSearchOpen(false);
+      setSearchValue('');
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
     router.push('/');
@@ -62,7 +93,7 @@ export default function Header() {
 
   const navLinks = [
     { label: 'Shop', href: '/products' },
-    { label: 'Collections', href: '/products' },
+    { label: 'Collections', href: '/collections' },
     { label: 'About', href: '/#about' },
     { label: 'Contact', href: '/#contact' },
   ];
@@ -84,7 +115,7 @@ export default function Header() {
               className="transition-transform duration-300 group-hover:scale-105"
             />
             <span className="text-xl font-black tracking-tight text-foreground">
-              Home<span className="text-primary">Vibe</span>
+              Nyotas<span className="text-primary"> Homecare</span>
             </span>
           </Link>
 
@@ -103,12 +134,33 @@ export default function Header() {
 
           {/* Right Actions */}
           <div className="flex items-center gap-3">
-            <button
-              aria-label="Search"
-              className="hidden sm:flex w-10 h-10 items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            >
-              <Icon name="MagnifyingGlassIcon" size={20} />
-            </button>
+            {/* Search */}
+            {searchOpen ? (
+              <form onSubmit={handleSearchSubmit} className="hidden sm:flex items-center gap-2">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  placeholder="Search products..."
+                  className="w-48 px-4 py-2 bg-card border border-border rounded-full text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <button type="submit" className="w-9 h-9 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-accent transition-colors">
+                  <Icon name="MagnifyingGlassIcon" size={16} />
+                </button>
+                <button type="button" onClick={() => { setSearchOpen(false); setSearchValue(''); }} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground">
+                  <Icon name="XMarkIcon" size={18} />
+                </button>
+              </form>
+            ) : (
+              <button
+                aria-label="Search"
+                onClick={() => setSearchOpen(true)}
+                className="hidden sm:flex w-10 h-10 items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              >
+                <Icon name="MagnifyingGlassIcon" size={20} />
+              </button>
+            )}
 
             <Link
               href="/cart"
@@ -125,11 +177,18 @@ export default function Header() {
                 {user ? (
                   <div className="hidden sm:flex items-center gap-2">
                     {userRole === 'admin' && (
-                      <Link href="/admin" className="px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-muted border border-border">
+                      <Link
+                        href="/admin"
+                        className="px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-muted border border-border"
+                      >
                         Admin
                       </Link>
                     )}
-                    <Link href="/profile" className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-black text-sm hover:bg-accent transition-colors">
+                    <Link
+                      href="/admin"
+                      className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-black text-sm hover:bg-accent transition-colors"
+                      title="Go to Admin Dashboard"
+                    >
                       {user.email?.charAt(0).toUpperCase()}
                     </Link>
                   </div>
@@ -162,6 +221,20 @@ export default function Header() {
           className="fixed inset-0 z-40 bg-background/95 backdrop-blur-xl flex flex-col pt-24 px-8 pb-10"
           onClick={(e) => { if (e.target === e.currentTarget) setMobileOpen(false); }}
         >
+          {/* Mobile search */}
+          <form onSubmit={(e) => { e.preventDefault(); if (searchValue.trim()) { router.push(`/products?q=${encodeURIComponent(searchValue.trim())}`); setMobileOpen(false); setSearchValue(''); }}} className="mb-6">
+            <div className="relative">
+              <Icon name="MagnifyingGlassIcon" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                placeholder="Search products..."
+                className="w-full pl-10 pr-4 py-3 bg-card border border-border rounded-full text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </form>
+
           <nav className="flex flex-col gap-2">
             {navLinks.map((link) => (
               <Link
@@ -188,7 +261,7 @@ export default function Header() {
                     onClick={() => setMobileOpen(false)}
                     className="text-3xl font-black uppercase tracking-tight text-foreground hover:text-primary transition-colors py-3 border-b border-border"
                   >
-                    Admin
+                    Admin Dashboard
                   </Link>
                 )}
               </>

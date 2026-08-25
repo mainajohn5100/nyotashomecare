@@ -2,6 +2,7 @@ import React from 'react';
 import type { Metadata, Viewport } from 'next';
 import { DM_Sans } from 'next/font/google';
 import { AuthProvider } from '@/contexts/AuthContext';
+import WhatsAppBubble from '@/components/WhatsAppBubble';
 
 import '../styles/tailwind.css';
 
@@ -19,13 +20,13 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
-  title: 'HomeVibe — Bold Home Goods That Transform Your Space',
-  description: 'Shop HomeVibe for furniture, décor, kitchenware, and everyday home goods. Bold design, real quality — find pieces that make your space feel intentional.',
+  title: 'Nyotas Homecare — Bold Home Goods That Transform Your Space',
+  description: 'Shop Nyotas Homecare for furniture, décor, kitchenware, and everyday home goods. Bold design, real quality — find pieces that make your space feel intentional.',
   icons: {
     icon: [{ url: '/favicon.ico', type: 'image/x-icon' }],
   },
   openGraph: {
-    title: 'HomeVibe — Bold Home Goods',
+    title: 'Nyotas Homecare — Bold Home Goods',
     description: 'Furniture, décor & kitchenware that transforms your space.',
     images: [{ url: '/assets/images/app_logo.png', width: 1200, height: 630 }],
   },
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body className={dmSans.className}>
         <AuthProvider>
           {children}
+          <WhatsAppBubble />
         </AuthProvider>
 
         <script type="module" async src="https://static.rocket.new/rocket-web.js?_cfg=https%3A%2F%2Fhomevibe5370back.builtwithrocket.new&_be=https%3A%2F%2Fappanalytics.rocket.new&_v=0.1.20" />
