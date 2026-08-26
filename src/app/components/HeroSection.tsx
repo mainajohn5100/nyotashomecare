@@ -3,54 +3,111 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import AppImage from '@/components/ui/AppImage';
 import Icon from '@/components/ui/AppIcon';
+import { createClient } from '@/lib/supabase/client';
 
-const heroData = [
-{
-  id: 0,
-  headline: ['Living Room', 'Reinvented'],
-  label: 'New Collection',
-  img: "https://images.unsplash.com/photo-1724780027758-623777e0488b",
-  imgAlt: 'Bright modern living room with warm neutral tones, plush sofa, and large windows letting in natural light',
-  tag: 'Furniture',
-  price: 'From KSh 38,870'
-},
-{
-  id: 1,
-  headline: ['Kitchen', 'Elevated'],
-  label: 'Chef Favorites',
-  img: "https://images.unsplash.com/photo-1575882711815-7ac675ec1ebd",
-  imgAlt: 'Bright open kitchen with terracotta accents, copper cookware hanging on wall, and clean white countertops',
-  tag: 'Kitchenware',
-  price: 'From KSh 6,370'
-},
-{
-  id: 2,
-  headline: ['Bedroom', 'Sanctuary'],
-  label: 'Rest Well',
-  img: "https://img.rocket.new/generatedImages/rocket_gen_img_1a7c50e83-1772063715990.png",
-  imgAlt: 'Serene bedroom with linen bedding in warm cream tones, wooden nightstand, and soft morning light',
-  tag: 'Bedroom',
-  price: 'From KSh 16,770'
-}];
+interface HeroSlide {
+  id: string;
+  sort_order: number;
+  headline_line1: string;
+  headline_line2: string;
+  label: string;
+  tag: string;
+  price_from: string;
+  images: string[];
+  category_id: string | null;
+  is_active: boolean;
+  categories?: { name: string; slug: string } | null;
+}
 
+const FALLBACK_SLIDES: HeroSlide[] = [
+  {
+    id: '0',
+    sort_order: 0,
+    headline_line1: 'Living Room',
+    headline_line2: 'Reinvented',
+    label: 'New Collection',
+    tag: 'Furniture',
+    price_from: 'From KSh 38,870',
+    images: ['https://images.unsplash.com/photo-1724780027758-623777e0488b'],
+    category_id: null,
+    is_active: true,
+  },
+  {
+    id: '1',
+    sort_order: 1,
+    headline_line1: 'Kitchen',
+    headline_line2: 'Elevated',
+    label: 'Chef Favorites',
+    tag: 'Kitchenware',
+    price_from: 'From KSh 6,370',
+    images: ['https://images.unsplash.com/photo-1575882711815-7ac675ec1ebd'],
+    category_id: null,
+    is_active: true,
+  },
+  {
+    id: '2',
+    sort_order: 2,
+    headline_line1: 'Bedroom',
+    headline_line2: 'Sanctuary',
+    label: 'Rest Well',
+    tag: 'Bedroom',
+    price_from: 'From KSh 16,770',
+    images: ['https://img.rocket.new/generatedImages/rocket_gen_img_1a7c50e83-1772063715990.png'],
+    category_id: null,
+    is_active: true,
+  },
+];
 
 export default function HeroSection() {
+  const [slides, setSlides] = useState<HeroSlide[]>(FALLBACK_SLIDES);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [imgSrc, setImgSrc] = useState(heroData[0].img);
-  const [imgAlt, setImgAlt] = useState(heroData[0].imgAlt);
+  const [activeImgIdx, setActiveImgIdx] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [floatVisible, setFloatVisible] = useState(false);
   const imgRef = useRef<HTMLDivElement>(null);
+  const imgIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const fetchSlides = async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('hero_settings')
+        .select('*, categories(name, slug)')
+        .eq('is_active', true)
+        .order('sort_order')
+        .limit(6);
+      if (data && data.length > 0) {
+        setSlides(data);
+      }
+    };
+    fetchSlides();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setFloatVisible(true), 600);
     return () => clearTimeout(timer);
   }, []);
 
+  // Auto-cycle images for active slide
+  useEffect(() => {
+    if (imgIntervalRef.current) clearInterval(imgIntervalRef.current);
+    const currentSlide = slides[activeIdx];
+    if (!currentSlide || currentSlide.images.length <= 1) {
+      setActiveImgIdx(0);
+      return;
+    }
+    setActiveImgIdx(0);
+    imgIntervalRef.current = setInterval(() => {
+      setActiveImgIdx((prev) => (prev + 1) % currentSlide.images.length);
+    }, 2500);
+    return () => {
+      if (imgIntervalRef.current) clearInterval(imgIntervalRef.current);
+    };
+  }, [activeIdx, slides]);
+
   const handleTitleHover = (idx: number) => {
     if (idx === activeIdx || isTransitioning) return;
     setIsTransitioning(true);
-    setActiveIdx(idx);
 
     if (imgRef.current) {
       imgRef.current.style.opacity = '0';
@@ -58,8 +115,8 @@ export default function HeroSection() {
     }
 
     setTimeout(() => {
-      setImgSrc(heroData[idx].img);
-      setImgAlt(heroData[idx].imgAlt);
+      setActiveIdx(idx);
+      setActiveImgIdx(0);
       if (imgRef.current) {
         imgRef.current.style.transition = 'opacity 0.55s ease, transform 0.55s cubic-bezier(0.23,1,0.32,1)';
         imgRef.current.style.opacity = '1';
@@ -69,7 +126,11 @@ export default function HeroSection() {
     }, 280);
   };
 
-  const active = heroData[activeIdx];
+  const active = slides[activeIdx] || FALLBACK_SLIDES[0];
+  const currentImg = active.images?.[activeImgIdx] || active.images?.[0] || '/assets/images/no_image.png';
+  const categoryHref = active.categories?.slug
+    ? `/collections?category=${active.categories.slug}`
+    : '/products';
 
   return (
     <section className="relative h-screen max-h-screen pt-16 bg-background overflow-hidden flex items-center">
@@ -85,27 +146,29 @@ export default function HeroSection() {
             <div className="section-label mb-1">Nyotas Homecare 2026</div>
 
             <div className="flex flex-col gap-2" role="list">
-              {heroData.map((item, idx) =>
-              <div
-                key={item.id}
-                role="listitem"
-                onMouseEnter={() => handleTitleHover(idx)}
-                onClick={() => handleTitleHover(idx)}
-                className={`hero-title-item group cursor-pointer select-none ${activeIdx === idx ? 'active' : ''}`}>
-                
+              {slides.map((item, idx) => (
+                <div
+                  key={item.id}
+                  role="listitem"
+                  onMouseEnter={() => handleTitleHover(idx)}
+                  onClick={() => handleTitleHover(idx)}
+                  className={`hero-title-item group cursor-pointer select-none ${activeIdx === idx ? 'active' : ''}`}
+                >
                   <div className="flex items-baseline gap-3">
                     <span className="text-hero-xl text-foreground font-black uppercase leading-none tracking-tight">
-                      {item.headline[0]}
+                      {item.headline_line1}
                     </span>
                   </div>
                   <div className="flex items-baseline gap-3">
-                    <span className="text-hero-xl font-black uppercase leading-none tracking-tight"
-                  style={{ color: activeIdx === idx ? 'var(--primary)' : 'var(--foreground)' }}>
-                      {item.headline[1]}
+                    <span
+                      className="text-hero-xl font-black uppercase leading-none tracking-tight"
+                      style={{ color: activeIdx === idx ? 'var(--primary)' : 'var(--foreground)' }}
+                    >
+                      {item.headline_line2}
                     </span>
                   </div>
                 </div>
-              )}
+              ))}
             </div>
 
             <p className="text-muted-foreground text-base max-w-sm leading-relaxed mt-2">
@@ -146,24 +209,36 @@ export default function HeroSection() {
             <div
               className="img-mask-rounded overflow-hidden aspect-[5/4] relative shadow-warm"
               ref={imgRef}
-              style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}>
-              
+              style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}
+            >
               <AppImage
-                src={imgSrc}
-                alt={imgAlt}
+                src={currentImg}
+                alt={`${active.headline_line1} ${active.headline_line2}`}
                 fill
                 className="object-cover"
                 priority
-                sizes="(max-width: 1024px) 100vw, 58vw" />
-              
+                sizes="(max-width: 1024px) 100vw, 58vw"
+              />
+              {/* Image dots indicator */}
+              {active.images.length > 1 && (
+                <div className="absolute bottom-3 right-3 flex gap-1.5 z-10">
+                  {active.images.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveImgIdx(i)}
+                      className={`w-1.5 h-1.5 rounded-full transition-all ${i === activeImgIdx ? 'bg-white w-4' : 'bg-white/50'}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Floating Product Card */}
             <div
-              className={`absolute bottom-4 left-4 lg:-left-10 z-20 bg-card/95 backdrop-blur-xl border border-border p-4 rounded-2xl shadow-warm max-w-[200px] transition-all duration-700 ${
-              floatVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`
-              }>
-              
+              className={`absolute bottom-4 left-4 lg:-left-10 z-20 bg-card backdrop-blur-xl border border-border p-4 rounded-2xl shadow-warm max-w-[200px] transition-all duration-700 ${
+                floatVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+              }`}
+            >
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 <span className="text-[10px] font-black uppercase tracking-widest text-primary">{active.label}</span>
@@ -171,11 +246,11 @@ export default function HeroSection() {
               <p className="text-sm font-black text-foreground leading-tight mb-1">
                 {active.tag} Collection
               </p>
-              <p className="text-xs font-bold text-primary">{active.price}</p>
+              <p className="text-xs font-bold text-primary">{active.price_from}</p>
               <Link
-                href="/products"
-                className="mt-2 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-foreground hover:text-primary transition-colors">
-                
+                href={categoryHref}
+                className="mt-2 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-foreground hover:text-primary transition-colors"
+              >
                 Explore <Icon name="ArrowRightIcon" size={12} />
               </Link>
             </div>
@@ -192,19 +267,20 @@ export default function HeroSection() {
           <div className="lg:hidden relative">
             <div
               className="img-mask-rounded overflow-hidden aspect-[4/3] relative shadow-warm"
-              ref={undefined}
-              style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}>
+              style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}
+            >
               <AppImage
-                src={imgSrc}
-                alt={imgAlt}
+                src={currentImg}
+                alt={`${active.headline_line1} ${active.headline_line2}`}
                 fill
                 className="object-cover"
                 priority
-                sizes="100vw" />
+                sizes="100vw"
+              />
             </div>
           </div>
         </div>
       </div>
-    </section>);
-
+    </section>
+  );
 }

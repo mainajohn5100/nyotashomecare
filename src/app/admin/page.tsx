@@ -372,10 +372,16 @@ export default function AdminPage() {
               <h1 className="text-3xl font-black text-foreground">Admin Dashboard</h1>
               <p className="text-muted-foreground mt-1">Manage your store — Nyotas Homecare</p>
             </div>
-            <Link href="/profile" className="btn-secondary !px-5 !py-2.5 !text-xs">
-              <Icon name="UserIcon" size={16} />
-              My Profile
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link href="/admin/settings" className="btn-secondary !px-5 !py-2.5 !text-xs">
+                <Icon name="Cog6ToothIcon" size={16} />
+                Settings
+              </Link>
+              <Link href="/profile" className="btn-secondary !px-5 !py-2.5 !text-xs">
+                <Icon name="UserIcon" size={16} />
+                My Profile
+              </Link>
+            </div>
           </div>
 
           <div className="flex gap-1 bg-secondary rounded-full p-1 w-fit mb-8 border border-border overflow-x-auto">

@@ -18,7 +18,15 @@ interface Product {
   images?: string[] | null;
   badge?: string;
   is_featured?: boolean;
+  category_id?: string | null;
   categories?: { name: string; slug: string } | null;
+}
+
+interface CategoryGroup {
+  id: string;
+  name: string;
+  slug: string;
+  products: Product[];
 }
 
 function formatPrice(kes: number): string {
@@ -53,20 +61,25 @@ function ProductCard({ product, onAddToCart, isLoggedIn, onLoginRequired }: Prod
   const displayImg = (product.images && product.images.length > 0) ? product.images[0] : product.image_url;
 
   return (
-    <Link href={`/products/${product.slug}`} className="product-card group relative flex flex-col bg-card rounded-xl border border-border overflow-hidden shadow-warm hover:shadow-lg transition-shadow duration-300">
+    <Link
+      href={`/products/${product.slug}`}
+      className="product-card group relative flex flex-col bg-card rounded-xl border border-border overflow-hidden shadow-warm hover:shadow-lg transition-shadow duration-300 flex-shrink-0 w-48 sm:w-56"
+    >
       <div className="relative overflow-hidden aspect-[4/3] bg-secondary">
         <AppImage
           src={displayImg || '/assets/images/no_image.png'}
           alt={product.name}
           fill
           className="product-img object-cover"
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" />
+          sizes="224px"
+        />
         <div className="product-card-overlay absolute inset-0 bg-foreground/20 flex items-center justify-center">
           <button
             onClick={handleAdd}
             className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-full transition-all duration-200 shadow-lg ${
               added ? 'bg-green-500 text-white scale-95' : 'bg-card text-foreground hover:bg-primary hover:text-primary-foreground scale-100'
-            }`}>
+            }`}
+          >
             {added ? '✓ Added!' : 'Add to Cart'}
           </button>
         </div>
@@ -81,9 +94,9 @@ function ProductCard({ product, onAddToCart, isLoggedIn, onLoginRequired }: Prod
           </div>
         )}
       </div>
-      <div className="p-2.5 sm:p-3 flex flex-col gap-1 flex-1">
+      <div className="p-2.5 flex flex-col gap-1 flex-1">
         <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{product.categories?.name || ''}</p>
-        <h3 className="text-xs sm:text-sm font-bold text-foreground leading-tight line-clamp-2">{product.name}</h3>
+        <h3 className="text-xs font-bold text-foreground leading-tight line-clamp-2">{product.name}</h3>
         <div className="flex items-center gap-1">
           <div className="flex">
             {[...Array(5)].map((_, i) => (
@@ -92,13 +105,14 @@ function ProductCard({ product, onAddToCart, isLoggedIn, onLoginRequired }: Prod
                 name="StarIcon"
                 variant={i < Math.floor(product.rating) ? 'solid' : 'outline'}
                 size={10}
-                className={i < Math.floor(product.rating) ? 'text-primary' : 'text-border'} />
+                className={i < Math.floor(product.rating) ? 'text-primary' : 'text-border'}
+              />
             ))}
           </div>
           <span className="text-[10px] text-muted-foreground">({product.review_count})</span>
         </div>
         <div className="flex items-center gap-1.5 mt-auto pt-1">
-          <span className="text-sm sm:text-base font-black text-foreground">{formatPrice(product.price)}</span>
+          <span className="text-sm font-black text-foreground">{formatPrice(product.price)}</span>
           {product.original_price && (
             <span className="text-xs text-muted-foreground line-through">{formatPrice(product.original_price)}</span>
           )}
@@ -108,58 +122,123 @@ function ProductCard({ product, onAddToCart, isLoggedIn, onLoginRequired }: Prod
   );
 }
 
+interface HorizontalRowProps {
+  group: CategoryGroup;
+  onAddToCart: (product: Product) => void;
+  isLoggedIn: boolean;
+  onLoginRequired: () => void;
+}
+
+function HorizontalRow({ group, onAddToCart, isLoggedIn, onLoginRequired }: HorizontalRowProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (dir: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollBy({ left: dir === 'right' ? 280 : -280, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="mb-14">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <p className="section-label mb-1">Collection</p>
+          <h3 className="text-2xl font-black text-foreground">{group.name}</h3>
+        </div>
+        <Link
+          href={`/collections?category=${group.slug}`}
+          className="btn-ghost group flex items-center gap-1.5 text-sm font-black"
+        >
+          View All {group.name}
+          <Icon name="ArrowRightIcon" size={16} className="group-hover:translate-x-1 transition-transform" />
+        </Link>
+      </div>
+      <div className="relative">
+        <button
+          onClick={() => scroll('left')}
+          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-8 h-8 rounded-full bg-card border border-border shadow-warm flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors"
+          aria-label="Scroll left"
+        >
+          <Icon name="ChevronLeftIcon" size={16} />
+        </button>
+        <div
+          ref={scrollRef}
+          className="flex gap-3 overflow-x-auto pb-2 scroll-smooth"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {group.products.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              onAddToCart={onAddToCart}
+              isLoggedIn={isLoggedIn}
+              onLoginRequired={onLoginRequired}
+            />
+          ))}
+        </div>
+        <button
+          onClick={() => scroll('right')}
+          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-8 h-8 rounded-full bg-card border border-border shadow-warm flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors"
+          aria-label="Scroll right"
+        >
+          <Icon name="ChevronRightIcon" size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function FeaturedProducts() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
   const [cartAdded, setCartAdded] = useState<string | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-  const sectionRef = useRef<HTMLElement>(null);
   const { user } = useAuth();
 
   useEffect(() => {
     const fetchFeatured = async () => {
       const supabase = createClient();
-      const { data } = await supabase
+
+      // Fetch featured products
+      const { data: products } = await supabase
         .from('products')
         .select('*, categories(name, slug)')
         .eq('is_active', true)
         .eq('is_featured', true)
-        .order('created_at', { ascending: false })
-        .limit(8);
-      if (data && data.length > 0) {
-        setProducts(data);
-      } else {
-        // Fallback: show any active products if none are featured
+        .order('created_at', { ascending: false });
+
+      const allProducts: Product[] = products || [];
+
+      if (allProducts.length === 0) {
+        // Fallback: show any active products
         const { data: fallback } = await supabase
           .from('products')
           .select('*, categories(name, slug)')
           .eq('is_active', true)
           .order('created_at', { ascending: false })
-          .limit(8);
-        if (fallback) setProducts(fallback);
+          .limit(20);
+        if (fallback && fallback.length > 0) {
+          groupProducts(fallback);
+        }
+        return;
       }
-    };
-    fetchFeatured();
-  }, []);
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const items = entry.target.querySelectorAll('.product-reveal');
-            items.forEach((item, i) => {
-              setTimeout(() => {
-                (item as HTMLElement).style.opacity = '1';
-                (item as HTMLElement).style.transform = 'translateY(0)';
-              }, i * 80);
-            });
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
+      groupProducts(allProducts);
+    };
+
+    const groupProducts = (products: Product[]) => {
+      const map = new Map<string, CategoryGroup>();
+      for (const p of products) {
+        const catId = p.category_id || 'uncategorized';
+        const catName = p.categories?.name || 'Featured';
+        const catSlug = p.categories?.slug || 'products';
+        if (!map.has(catId)) {
+          map.set(catId, { id: catId, name: catName, slug: catSlug, products: [] });
+        }
+        map.get(catId)!.products.push(p);
+      }
+      setCategoryGroups(Array.from(map.values()));
+    };
+
+    fetchFeatured();
   }, []);
 
   const handleAddToCart = (product: Product) => {
@@ -173,7 +252,7 @@ export default function FeaturedProducts() {
   };
 
   return (
-    <section ref={sectionRef} className="py-24 bg-secondary">
+    <section className="py-24 bg-secondary">
       {showLoginPrompt && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-foreground text-background px-5 py-3 rounded-full shadow-lg flex items-center gap-3 text-sm font-bold">
           <Icon name="LockClosedIcon" size={16} />
@@ -201,27 +280,20 @@ export default function FeaturedProducts() {
           </Link>
         </div>
 
-        {products.length === 0 ? (
+        {categoryGroups.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <p className="text-sm">No featured products yet.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="product-reveal"
-                style={{ opacity: 0, transform: 'translateY(24px)', transition: 'opacity 0.6s ease, transform 0.6s cubic-bezier(0.23,1,0.32,1)' }}
-              >
-                <ProductCard
-                  product={product}
-                  onAddToCart={handleAddToCart}
-                  isLoggedIn={!!user}
-                  onLoginRequired={handleLoginRequired}
-                />
-              </div>
-            ))}
-          </div>
+          categoryGroups.map((group) => (
+            <HorizontalRow
+              key={group.id}
+              group={group}
+              onAddToCart={handleAddToCart}
+              isLoggedIn={!!user}
+              onLoginRequired={handleLoginRequired}
+            />
+          ))
         )}
       </div>
     </section>
