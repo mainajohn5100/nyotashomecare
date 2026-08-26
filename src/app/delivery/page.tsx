@@ -143,9 +143,22 @@ function DeliveryContent() {
 
       if (orderError || !order) throw orderError || new Error('Failed to create order');
 
+      // Validate product IDs exist in the database to avoid FK constraint errors
+      const productIds = cartItems.map((item) => item.id).filter(Boolean);
+      let validProductIds = new Set<string>();
+      if (productIds.length > 0) {
+        const { data: validProducts } = await supabase
+          .from('products')
+          .select('id')
+          .in('id', productIds);
+        if (validProducts) {
+          validProducts.forEach((p) => validProductIds.add(p.id));
+        }
+      }
+
       const orderItems = cartItems.map((item) => ({
         order_id: order.id,
-        product_id: item.id,
+        product_id: validProductIds.has(item.id) ? item.id : null,
         product_name: item.name,
         product_image: item.img || '',
         quantity: item.quantity,

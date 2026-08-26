@@ -11,9 +11,8 @@ import Icon from '@/components/ui/AppIcon';
 
 type AdminTab = 'overview' | 'products' | 'categories' | 'orders';
 
-const KES_RATE = 130;
 function formatPrice(amount: number): string {
-  return `KSh ${(amount * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+  return `KSh ${amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
 }
 function formatKES(amount: number): string {
   return `KSh ${amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
@@ -343,7 +342,7 @@ export default function AdminPage() {
   // Total stock valuation: sum of (price * stock_quantity) for all active products
   const totalStockValuation = products
     .filter(p => p.is_active)
-    .reduce((sum, p) => sum + p.price * KES_RATE * p.stock_quantity, 0);
+    .reduce((sum, p) => sum + p.price * p.stock_quantity, 0);
 
   // Low stock products
   const lowStockProducts = products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= lowStockThreshold);
@@ -408,8 +407,8 @@ export default function AdminPage() {
                       { label: 'Total Products', value: products.length, icon: 'ArchiveBoxIcon', color: 'text-blue-600' },
                       { label: 'Categories', value: categories.length, icon: 'TagIcon', color: 'text-purple-600' },
                       { label: 'Total Orders', value: orders.length, icon: 'ShoppingBagIcon', color: 'text-orange-600' },
-                      { label: 'Total Revenue', value: formatKES(totalRevenue * KES_RATE), icon: 'BanknotesIcon', color: 'text-green-600' },
-                      { label: "Today's Sales", value: formatKES(dailySalesAmount * KES_RATE), icon: 'CalendarDaysIcon', color: 'text-teal-600' },
+                      { label: 'Total Revenue', value: formatKES(totalRevenue), icon: 'BanknotesIcon', color: 'text-green-600' },
+                      { label: "Today's Sales", value: formatKES(dailySalesAmount), icon: 'CalendarDaysIcon', color: 'text-teal-600' },
                       { label: 'Stock Valuation', value: formatKES(totalStockValuation), icon: 'CubeIcon', color: 'text-indigo-600' },
                     ].map((stat) => (
                       <div key={stat.label} className="bg-card border border-border rounded-2xl p-5 shadow-warm">

@@ -45,9 +45,8 @@ interface Review {
   user_profiles?: { full_name: string } | null;
 }
 
-const KES_RATE = 130;
-function formatPrice(usd: number): string {
-  return `KSh ${(usd * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+function formatKES(amount: number): string {
+  return `KSh ${amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
 }
 
 export default function ProductDetailPage() {
@@ -63,6 +62,8 @@ export default function ProductDetailPage() {
   const [added, setAdded] = useState(false);
   const [activeImg, setActiveImg] = useState(0);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [inWishlist, setInWishlist] = useState(false);
 
   // Reviews state
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -71,6 +72,7 @@ export default function ProductDetailPage() {
   const [reviewError, setReviewError] = useState('');
   const [reviewSuccess, setReviewSuccess] = useState(false);
   const [userHasReviewed, setUserHasReviewed] = useState(false);
+  const [canReview, setCanReview] = useState(false);
 
   const fetchReviews = useCallback(async (productId: string) => {
     const supabase = createClient();
@@ -83,6 +85,7 @@ export default function ProductDetailPage() {
     if (data) setReviews(data);
 
     if (user) {
+      // Check if user already reviewed
       const { data: existing } = await supabase
         .from('reviews')
         .select('id')
@@ -90,6 +93,15 @@ export default function ProductDetailPage() {
         .eq('user_id', user.id)
         .single();
       setUserHasReviewed(!!existing);
+
+      // Check if user has a delivered order containing this product
+      const { data: deliveredItems } = await supabase
+        .from('order_items')
+        .select('id, orders!inner(user_id, status)')
+        .eq('product_id', productId)
+        .eq('orders.user_id', user.id)
+        .eq('orders.status', 'delivered');
+      setCanReview(!!(deliveredItems && deliveredItems.length > 0));
     }
   }, [user]);
 
@@ -118,11 +130,21 @@ export default function ProductDetailPage() {
             .limit(4);
           if (related) setRelatedProducts(related);
         }
+        // Check wishlist
+        if (user) {
+          const { data: wl } = await supabase
+            .from('wishlists')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('product_id', data.id)
+            .single();
+          setInWishlist(!!wl);
+        }
       }
       setLoading(false);
     };
     fetchProduct();
-  }, [slug, fetchReviews]);
+  }, [slug, fetchReviews, user]);
 
   const allImages = product
     ? [
@@ -139,27 +161,47 @@ export default function ProductDetailPage() {
     }
     if (!product) return;
     try {
-      const stored = localStorage.getItem('cart');
-      const cart: CartItem[] = stored ? JSON.parse(stored) : [];
-      const existing = cart.find(item => item.id === product.id);
+      const stored = localStorage.getItem('nyotas_cart');
+      const cart = stored ? JSON.parse(stored) : [];
+      const existing = cart.find((item: any) => item.id === product.id);
       if (existing) {
         existing.quantity = Math.min(existing.quantity + quantity, product.stock_quantity);
       } else {
         cart.push({
           id: product.id,
           name: product.name,
-          price: product.price * KES_RATE,
+          category: product.categories?.name || '',
+          price: product.price,
           quantity,
-          image: allImages[0] || '/assets/images/no_image.png',
+          img: allImages[0] || '/assets/images/no_image.png',
+          alt: product.name,
           slug: product.slug,
         });
       }
-      localStorage.setItem('cart', JSON.stringify(cart));
+      localStorage.setItem('nyotas_cart', JSON.stringify(cart));
       window.dispatchEvent(new Event('cart-updated'));
     } catch {}
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   }, [user, product, quantity, allImages]);
+
+  const handleToggleWishlist = async () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if (!product) return;
+    setWishlistLoading(true);
+    const supabase = createClient();
+    if (inWishlist) {
+      await supabase.from('wishlists').delete().eq('user_id', user.id).eq('product_id', product.id);
+      setInWishlist(false);
+    } else {
+      await supabase.from('wishlists').insert({ user_id: user.id, product_id: product.id });
+      setInWishlist(true);
+    }
+    setWishlistLoading(false);
+  };
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +257,7 @@ export default function ProductDetailPage() {
       '@type': 'Offer',
       url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://homevibe5370.builtwithrocket.new'}/products/${product.slug}`,
       priceCurrency: 'KES',
-      price: (product.price * KES_RATE).toFixed(0),
+      price: product.price.toFixed(0),
       availability: product.stock_quantity > 0
         ? 'https://schema.org/InStock'
         : 'https://schema.org/OutOfStock',
@@ -365,9 +407,9 @@ export default function ProductDetailPage() {
               </div>
 
               <div className="flex items-baseline gap-3 mb-6">
-                <span className="text-4xl font-black text-foreground">{formatPrice(product.price)}</span>
+                <span className="text-4xl font-black text-foreground">{formatKES(product.price)}</span>
                 {product.original_price && (
-                  <span className="text-xl text-muted-foreground line-through">{formatPrice(product.original_price)}</span>
+                  <span className="text-xl text-muted-foreground line-through">{formatKES(product.original_price)}</span>
                 )}
                 {discount && (
                   <span className="text-sm font-black text-green-600 bg-green-50 px-2.5 py-1 rounded-full">
@@ -406,7 +448,7 @@ export default function ProductDetailPage() {
                 </div>
               )}
 
-              <div className="flex items-center gap-4 mb-6">
+              <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center gap-1 bg-secondary rounded-full border border-border p-1">
                   <button
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
@@ -431,6 +473,19 @@ export default function ProductDetailPage() {
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {added ? '✓ Added to Cart!' : product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
+                </button>
+                <button
+                  onClick={handleToggleWishlist}
+                  disabled={wishlistLoading}
+                  aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+                  className="w-12 h-12 rounded-full border border-border flex items-center justify-center hover:bg-secondary transition-colors disabled:opacity-50"
+                >
+                  <Icon
+                    name="HeartIcon"
+                    size={20}
+                    variant={inWishlist ? 'solid' : 'outline'}
+                    className={inWishlist ? 'text-red-500' : 'text-muted-foreground'}
+                  />
                 </button>
               </div>
 
@@ -458,7 +513,7 @@ export default function ProductDetailPage() {
                 { label: 'Category', value: product.categories?.name || 'Uncategorized' },
                 { label: 'Rating', value: `${product.rating} / 5.0 (${product.review_count} reviews)` },
                 { label: 'Availability', value: product.stock_quantity > 0 ? `In Stock (${product.stock_quantity} units)` : 'Out of Stock' },
-                { label: 'Price', value: `${formatPrice(product.price)}${product.original_price ? ` (was ${formatPrice(product.original_price)})` : ''}` },
+                { label: 'Price', value: `${formatKES(product.price)}${product.original_price ? ` (was ${formatKES(product.original_price)})` : ''}` },
                 ...(product.badge ? [{ label: 'Tag', value: product.badge }] : []),
               ].map((detail) => (
                 <div key={detail.label} className="flex flex-col gap-1">
@@ -499,6 +554,14 @@ export default function ProductDetailPage() {
                       </div>
                       <p className="font-bold text-foreground mb-1">Review Submitted!</p>
                       <p className="text-sm text-muted-foreground">Thank you for your feedback.</p>
+                    </div>
+                  ) : !canReview ? (
+                    <div className="text-center py-6">
+                      <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
+                        <Icon name="LockClosedIcon" size={24} className="text-amber-500" />
+                      </div>
+                      <p className="font-bold text-foreground mb-1">Purchase Required</p>
+                      <p className="text-sm text-muted-foreground">You can write a review after receiving this product (order marked as delivered).</p>
                     </div>
                   ) : (
                     <form onSubmit={handleSubmitReview} className="space-y-4">
@@ -648,7 +711,7 @@ export default function ProductDetailPage() {
                       </div>
                       <div className="p-4">
                         <p className="font-bold text-foreground text-sm leading-tight mb-1">{related.name}</p>
-                        <p className="text-lg font-black text-foreground">{formatPrice(related.price)}</p>
+                        <p className="text-lg font-black text-foreground">{formatKES(related.price)}</p>
                       </div>
                     </Link>
                   );

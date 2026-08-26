@@ -21,9 +21,8 @@ interface Product {
   categories?: { name: string; slug: string } | null;
 }
 
-const KES_RATE = 130;
-function formatPrice(usd: number): string {
-  return `KSh ${(usd * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+function formatPrice(kes: number): string {
+  return `KSh ${kes.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
 }
 
 interface ProductCardProps {

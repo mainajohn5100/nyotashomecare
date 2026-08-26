@@ -8,8 +8,6 @@ import { getCart, saveCart, CartItem } from '@/lib/cart';
 
 import { useAuth } from '@/contexts/AuthContext';
 
-const KES_RATE = 130;
-
 function formatKES(kes: number): string {
   return `KSh ${kes.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
 }
