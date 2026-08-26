@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AppImage from '@/components/ui/AppImage';
 import Icon from '@/components/ui/AppIcon';
-import { getCart, saveCart, clearCart, CartItem } from '@/lib/cart';
-import { createClient } from '@/lib/supabase/client';
+import { getCart, saveCart, CartItem } from '@/lib/cart';
+
 import { useAuth } from '@/contexts/AuthContext';
 
 const KES_RATE = 130;
@@ -85,49 +85,14 @@ export default function CartClient() {
       return;
     }
     if (items.length === 0) return;
-    setCheckingOut(true);
-    setCheckoutError('');
-    try {
-      const supabase = createClient();
 
-      // Create order
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user.id,
-          status: 'pending',
-          total_amount: total,
-          notes: appliedPromo ? `Promo: ${appliedPromo.code} (${appliedPromo.discount}% off)` : '',
-        })
-        .select('id')
-        .single();
-
-      if (orderError || !order) throw orderError || new Error('Failed to create order');
-
-      // Create order items
-      const orderItems = items.map((item) => ({
-        order_id: order.id,
-        product_id: item.id,
-        product_name: item.name,
-        product_image: item.img || '',
-        quantity: item.quantity,
-        unit_price: item.price,
-        total_price: item.price * item.quantity,
-      }));
-
-      const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
-      if (itemsError) throw itemsError;
-
-      // Clear cart
-      clearCart();
-      window.dispatchEvent(new Event('cart-updated'));
-
-      // Redirect to confirmation page
-      router.push(`/order-confirmation?order_id=${order.id}`);
-    } catch (err: any) {
-      setCheckoutError(err?.message || 'Checkout failed. Please try again.');
-      setCheckingOut(false);
+    // Redirect to delivery page instead of directly checking out
+    const params = new URLSearchParams();
+    if (appliedPromo) {
+      params.set('promo', appliedPromo.code);
+      params.set('discount', String(appliedPromo.discount));
     }
+    router.push(`/delivery${params.toString() ? '?' + params.toString() : ''}`);
   };
 
   if (!mounted) {

@@ -53,7 +53,9 @@ interface Order {
   total_amount: number;
   created_at: string;
   shipping_address: string;
-  user_profiles?: { full_name: string; email: string } | null;
+  customer_phone: string;
+  pickup_location: string;
+  user_profiles?: { full_name: string; email: string; phone: string } | null;
   order_items?: { id: string; product_name: string; quantity: number; total_price: number }[];
 }
 
@@ -141,7 +143,7 @@ export default function AdminPage() {
     const supabase = createClient();
     const { data } = await supabase
       .from('orders')
-      .select('*, user_profiles(full_name, email), order_items(id, product_name, quantity, total_price)')
+      .select('*, user_profiles(full_name, email, phone), order_items(id, product_name, quantity, total_price)')
       .order('created_at', { ascending: false });
     if (data) setOrders(data);
   }, []);
@@ -834,6 +836,18 @@ export default function AdminPage() {
                             <div>
                               <p className="font-black text-foreground">#{order.id.slice(0, 8).toUpperCase()}</p>
                               <p className="text-sm text-muted-foreground">{order.user_profiles?.full_name || 'Guest'} · {order.user_profiles?.email}</p>
+                              {(order.customer_phone || order.user_profiles?.phone) && (
+                                <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                  <Icon name="PhoneIcon" size={11} className="text-primary" />
+                                  {order.customer_phone || order.user_profiles?.phone}
+                                </p>
+                              )}
+                              {order.pickup_location && (
+                                <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                  <Icon name="MapPinIcon" size={11} className="text-primary" />
+                                  {order.pickup_location}
+                                </p>
+                              )}
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 {new Date(order.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
                               </p>

@@ -261,14 +261,14 @@ export default function ProfilePage() {
                       <div>
                         <p className="text-xs text-muted-foreground font-mono">Order #{order.id.slice(0, 8).toUpperCase()}</p>
                         <p className="text-sm text-muted-foreground mt-0.5">
-                          {new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                          {new Date(order.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'long', day: 'numeric' })}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className={`text-xs font-bold px-3 py-1.5 rounded-full capitalize ${statusColors[order.status] || 'bg-secondary text-foreground'}`}>
                           {order.status}
                         </span>
-                        <span className="text-lg font-black text-foreground">${order.total_amount.toFixed(2)}</span>
+                        <span className="text-lg font-black text-foreground">KSh {order.total_amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}</span>
                       </div>
                     </div>
                     <div className="space-y-3">
@@ -279,11 +279,17 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-bold text-foreground text-sm truncate">{item.product_name}</p>
-                            <p className="text-xs text-muted-foreground">Qty: {item.quantity} × ${item.unit_price.toFixed(2)}</p>
+                            <p className="text-xs text-muted-foreground">Qty: {item.quantity} × KSh {item.unit_price.toLocaleString('en-KE', { maximumFractionDigits: 0 })}</p>
                           </div>
-                          <p className="font-black text-foreground text-sm">${item.total_price.toFixed(2)}</p>
+                          <p className="font-black text-foreground text-sm">KSh {item.total_price.toLocaleString('en-KE', { maximumFractionDigits: 0 })}</p>
                         </div>
                       ))}
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <Link href={`/orders/${order.id}`} className="btn-secondary !px-4 !py-2 !text-xs">
+                        <Icon name="ClipboardDocumentListIcon" size={14} />
+                        View Order Details
+                      </Link>
                     </div>
                   </div>
                 ))
