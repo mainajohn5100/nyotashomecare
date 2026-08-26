@@ -41,10 +41,8 @@ const priceRanges = [
   { label: 'KSh 50,000+', min: 50000, max: Infinity },
 ];
 
-const KES_RATE = 130;
-
-function formatPrice(usd: number): string {
-  return `KSh ${(usd * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+function formatPrice(kes: number): string {
+  return `KSh ${kes.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
 }
 
 export default function ProductsClient() {
@@ -114,7 +112,7 @@ export default function ProductsClient() {
     })
     .filter((p) => {
       const range = priceRanges[activePriceRange];
-      const kes = p.price * KES_RATE;
+      const kes = p.price;
       return kes >= range.min && kes <= range.max;
     })
     .filter((p) => {
@@ -163,7 +161,7 @@ export default function ProductsClient() {
       id: product.id,
       name: product.name,
       category: product.categories?.name || '',
-      price: product.price * KES_RATE,
+      price: product.price,
       quantity: 1,
       img: displayImg || '/assets/images/no_image.png',
       alt: product.name,

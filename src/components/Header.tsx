@@ -171,6 +171,16 @@ export default function Header() {
               <CartBadge count={cartCount} />
             </Link>
 
+            {user && (
+              <Link
+                href="/wishlist"
+                aria-label="Wishlist"
+                className="hidden sm:flex w-10 h-10 items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              >
+                <Icon name="HeartIcon" size={20} />
+              </Link>
+            )}
+
             {/* Auth buttons */}
             {!authLoading && (
               <>
@@ -254,6 +264,13 @@ export default function Header() {
                   className="text-3xl font-black uppercase tracking-tight text-foreground hover:text-primary transition-colors py-3 border-b border-border"
                 >
                   My Profile
+                </Link>
+                <Link
+                  href="/wishlist"
+                  onClick={() => setMobileOpen(false)}
+                  className="text-3xl font-black uppercase tracking-tight text-foreground hover:text-primary transition-colors py-3 border-b border-border"
+                >
+                  Wishlist
                 </Link>
                 {userRole === 'admin' && (
                   <Link

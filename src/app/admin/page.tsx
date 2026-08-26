@@ -11,9 +11,8 @@ import Icon from '@/components/ui/AppIcon';
 
 type AdminTab = 'overview' | 'products' | 'categories' | 'orders';
 
-const KES_RATE = 130;
 function formatPrice(amount: number): string {
-  return `KSh ${(amount * KES_RATE).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+  return `KSh ${amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
 }
 function formatKES(amount: number): string {
   return `KSh ${amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
@@ -53,7 +52,9 @@ interface Order {
   total_amount: number;
   created_at: string;
   shipping_address: string;
-  user_profiles?: { full_name: string; email: string } | null;
+  customer_phone: string;
+  pickup_location: string;
+  user_profiles?: { full_name: string; email: string; phone: string } | null;
   order_items?: { id: string; product_name: string; quantity: number; total_price: number }[];
 }
 
@@ -84,8 +85,15 @@ export default function AdminPage() {
   const [productSearch, setProductSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
 
-  // Low stock threshold
+  // Low stock threshold — configured in Settings page, read from localStorage
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('homevibe_low_stock_threshold');
+      if (stored) setLowStockThreshold(Math.max(1, parseInt(stored) || 5));
+    }
+  }, []);
 
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -141,7 +149,7 @@ export default function AdminPage() {
     const supabase = createClient();
     const { data } = await supabase
       .from('orders')
-      .select('*, user_profiles(full_name, email), order_items(id, product_name, quantity, total_price)')
+      .select('*, user_profiles(full_name, email, phone), order_items(id, product_name, quantity, total_price)')
       .order('created_at', { ascending: false });
     if (data) setOrders(data);
   }, []);
@@ -341,7 +349,7 @@ export default function AdminPage() {
   // Total stock valuation: sum of (price * stock_quantity) for all active products
   const totalStockValuation = products
     .filter(p => p.is_active)
-    .reduce((sum, p) => sum + p.price * KES_RATE * p.stock_quantity, 0);
+    .reduce((sum, p) => sum + p.price * p.stock_quantity, 0);
 
   // Low stock products
   const lowStockProducts = products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= lowStockThreshold);
@@ -371,10 +379,16 @@ export default function AdminPage() {
               <h1 className="text-3xl font-black text-foreground">Admin Dashboard</h1>
               <p className="text-muted-foreground mt-1">Manage your store — Nyotas Homecare</p>
             </div>
-            <Link href="/profile" className="btn-secondary !px-5 !py-2.5 !text-xs">
-              <Icon name="UserIcon" size={16} />
-              My Profile
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link href="/admin/settings" className="btn-secondary !px-5 !py-2.5 !text-xs">
+                <Icon name="Cog6ToothIcon" size={16} />
+                Settings
+              </Link>
+              <Link href="/profile" className="btn-secondary !px-5 !py-2.5 !text-xs">
+                <Icon name="UserIcon" size={16} />
+                My Profile
+              </Link>
+            </div>
           </div>
 
           <div className="flex gap-1 bg-secondary rounded-full p-1 w-fit mb-8 border border-border overflow-x-auto">
@@ -406,8 +420,8 @@ export default function AdminPage() {
                       { label: 'Total Products', value: products.length, icon: 'ArchiveBoxIcon', color: 'text-blue-600' },
                       { label: 'Categories', value: categories.length, icon: 'TagIcon', color: 'text-purple-600' },
                       { label: 'Total Orders', value: orders.length, icon: 'ShoppingBagIcon', color: 'text-orange-600' },
-                      { label: 'Total Revenue', value: formatKES(totalRevenue * KES_RATE), icon: 'BanknotesIcon', color: 'text-green-600' },
-                      { label: "Today's Sales", value: formatKES(dailySalesAmount * KES_RATE), icon: 'CalendarDaysIcon', color: 'text-teal-600' },
+                      { label: 'Total Revenue', value: formatKES(totalRevenue), icon: 'BanknotesIcon', color: 'text-green-600' },
+                      { label: "Today's Sales", value: formatKES(dailySalesAmount), icon: 'CalendarDaysIcon', color: 'text-teal-600' },
                       { label: 'Stock Valuation', value: formatKES(totalStockValuation), icon: 'CubeIcon', color: 'text-indigo-600' },
                     ].map((stat) => (
                       <div key={stat.label} className="bg-card border border-border rounded-2xl p-5 shadow-warm">
@@ -478,50 +492,6 @@ export default function AdminPage() {
 
               {activeTab === 'products' && (
                 <div>
-                  {/* Low Stock Threshold Setting */}
-                  <div className="bg-card border border-border rounded-2xl p-5 mb-5 shadow-warm flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="flex items-center gap-2 flex-1">
-                      <Icon name="ExclamationTriangleIcon" size={18} className="text-amber-500 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-black text-foreground">Low Stock Threshold</p>
-                        <p className="text-xs text-muted-foreground">Products at or below this quantity will be flagged as low stock</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="number"
-                        min={1}
-                        value={lowStockThreshold}
-                        onChange={(e) => setLowStockThreshold(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-24 px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      />
-                      <span className="text-sm text-muted-foreground font-medium">units</span>
-                    </div>
-                  </div>
-
-                  {/* Low Stock Products */}
-                  {lowStockProducts.length > 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon name="ExclamationTriangleIcon" size={16} className="text-amber-600" />
-                        <span className="text-sm font-black text-amber-800">
-                          {lowStockProducts.length} product{lowStockProducts.length !== 1 ? 's' : ''} nearing end of stock
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {lowStockProducts.map(p => (
-                          <button
-                            key={p.id}
-                            onClick={() => openProductForm(p)}
-                            className="text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1 rounded-full transition-colors"
-                          >
-                            {p.name} — {p.stock_quantity} left
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
                     <h2 className="text-xl font-black text-foreground">Products ({filteredProducts.length})</h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -834,6 +804,18 @@ export default function AdminPage() {
                             <div>
                               <p className="font-black text-foreground">#{order.id.slice(0, 8).toUpperCase()}</p>
                               <p className="text-sm text-muted-foreground">{order.user_profiles?.full_name || 'Guest'} · {order.user_profiles?.email}</p>
+                              {(order.customer_phone || order.user_profiles?.phone) && (
+                                <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                  <Icon name="PhoneIcon" size={11} className="text-primary" />
+                                  {order.customer_phone || order.user_profiles?.phone}
+                                </p>
+                              )}
+                              {order.pickup_location && (
+                                <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                  <Icon name="MapPinIcon" size={11} className="text-primary" />
+                                  {order.pickup_location}
+                                </p>
+                              )}
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 {new Date(order.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
                               </p>
