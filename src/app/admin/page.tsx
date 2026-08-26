@@ -85,8 +85,15 @@ export default function AdminPage() {
   const [productSearch, setProductSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
 
-  // Low stock threshold
+  // Low stock threshold — configured in Settings page, read from localStorage
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('homevibe_low_stock_threshold');
+      if (stored) setLowStockThreshold(Math.max(1, parseInt(stored) || 5));
+    }
+  }, []);
 
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -485,50 +492,6 @@ export default function AdminPage() {
 
               {activeTab === 'products' && (
                 <div>
-                  {/* Low Stock Threshold Setting */}
-                  <div className="bg-card border border-border rounded-2xl p-5 mb-5 shadow-warm flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="flex items-center gap-2 flex-1">
-                      <Icon name="ExclamationTriangleIcon" size={18} className="text-amber-500 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-black text-foreground">Low Stock Threshold</p>
-                        <p className="text-xs text-muted-foreground">Products at or below this quantity will be flagged as low stock</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="number"
-                        min={1}
-                        value={lowStockThreshold}
-                        onChange={(e) => setLowStockThreshold(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-24 px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      />
-                      <span className="text-sm text-muted-foreground font-medium">units</span>
-                    </div>
-                  </div>
-
-                  {/* Low Stock Products */}
-                  {lowStockProducts.length > 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon name="ExclamationTriangleIcon" size={16} className="text-amber-600" />
-                        <span className="text-sm font-black text-amber-800">
-                          {lowStockProducts.length} product{lowStockProducts.length !== 1 ? 's' : ''} nearing end of stock
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {lowStockProducts.map(p => (
-                          <button
-                            key={p.id}
-                            onClick={() => openProductForm(p)}
-                            className="text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1 rounded-full transition-colors"
-                          >
-                            {p.name} — {p.stock_quantity} left
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
                     <h2 className="text-xl font-black text-foreground">Products ({filteredProducts.length})</h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">

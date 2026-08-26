@@ -37,6 +37,7 @@ export default function AdminSettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingRole, setCheckingRole] = useState(true);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
 
   const [slides, setSlides] = useState<HeroSlide[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -103,6 +104,11 @@ export default function AdminSettingsPage() {
     if (!isAdmin) return;
     fetchSlides();
     fetchCategories();
+    // Load persisted low stock threshold
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('homevibe_low_stock_threshold');
+      if (stored) setLowStockThreshold(Math.max(1, parseInt(stored) || 5));
+    }
   }, [isAdmin, fetchSlides, fetchCategories]);
 
   const handleHeroImageUpload = async (files: FileList, slideId?: string) => {
@@ -529,6 +535,41 @@ export default function AdminSettingsPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Low Stock Threshold */}
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-warm mb-8">
+            <h2 className="text-xl font-black text-foreground mb-2">Inventory Settings</h2>
+            <p className="text-sm text-muted-foreground mb-6">Configure stock alert thresholds for your products.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 bg-secondary rounded-2xl border border-border">
+              <div className="flex items-center gap-2 flex-1">
+                <Icon name="ExclamationTriangleIcon" size={18} className="text-amber-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-black text-foreground">Low Stock Threshold</p>
+                  <p className="text-xs text-muted-foreground">Products at or below this quantity will be flagged as low stock in the dashboard</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={1}
+                  value={lowStockThreshold}
+                  onChange={(e) => {
+                    const val = Math.max(1, parseInt(e.target.value) || 1);
+                    setLowStockThreshold(val);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('homevibe_low_stock_threshold', String(val));
+                    }
+                  }}
+                  id="low-stock-threshold"
+                  className="w-24 px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <span className="text-sm text-muted-foreground font-medium">units</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Note: This threshold is used in the Admin Dashboard overview and Products tab to highlight items running low.
+            </p>
           </div>
 
           {/* Category Display Settings */}

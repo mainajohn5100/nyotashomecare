@@ -2,8 +2,8 @@ import React from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import HeroSection from '@/app/components/HeroSection';
-import CategoryBento from '@/app/components/CategoryBento';
 import FeaturedProducts from '@/app/components/FeaturedProducts';
+import CategoryScrollRows from '@/app/components/CategoryScrollRows';
 import BrandStory from '@/app/components/BrandStory';
 import TestimonialsSection from '@/app/components/TestimonialsSection';
 import ContactSection from '@/app/components/ContactSection';
@@ -45,8 +45,8 @@ export default function HomePage() {
       <Header />
       <main>
         <HeroSection />
-        <CategoryBento />
         <FeaturedProducts />
+        <CategoryScrollRows />
         <BrandStory />
         <TestimonialsSection />
         <ContactSection />
