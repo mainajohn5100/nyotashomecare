@@ -72,9 +72,8 @@ function ProductCard({ product, onAddToCart, isLoggedIn, onLoginRequired }: Prod
         <div className="product-card-overlay absolute inset-0 bg-foreground/20 flex items-center justify-center">
           <button
             onClick={handleAdd}
-            className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-full transition-all duration-200 shadow-lg ${
-              added ? 'bg-green-500 text-white scale-95' : 'bg-card text-foreground hover:bg-primary hover:text-primary-foreground scale-100'
-            }`}
+            className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-full transition-all duration-200 shadow-lg ${added ? 'bg-green-500 text-white scale-95' : 'bg-card text-foreground hover:bg-primary hover:text-primary-foreground scale-100'
+              }`}
           >
             {added ? '✓ Added!' : 'Add to Cart'}
           </button>
@@ -259,10 +258,10 @@ export default function CategoryScrollRows() {
               <span className="text-primary">Covered.</span>
             </h2>
           </div>
-          <Link href="/collections" className="btn-ghost group self-start sm:self-auto">
+          {/* <Link href="/collections" className="btn-ghost group self-start sm:self-auto">
             View All Collections
             <Icon name="ArrowRightIcon" size={16} className="group-hover:translate-x-1 transition-transform" />
-          </Link>
+          </Link> */}
         </div>
 
         {categories.map((cat) => (

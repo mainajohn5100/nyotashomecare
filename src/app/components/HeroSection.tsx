@@ -143,7 +143,7 @@ export default function HeroSection() {
 
           {/* Left: Staggered Titles */}
           <div className="lg:col-span-5 flex flex-col gap-3">
-            <div className="section-label mb-1">Nyotas Homecare 2026</div>
+            {/* <div className="section-label mb-1">Nyotas Homecare 2026</div> */}
 
             <div className="flex flex-col gap-2" role="list">
               {slides.map((item, idx) => (
@@ -198,8 +198,8 @@ export default function HeroSection() {
               </div>
               <div className="w-px h-8 bg-border" />
               <div className="text-center">
-                <p className="text-xl font-black text-foreground">Free</p>
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Shipping KSh 5k+</p>
+                <p className="text-xl font-black text-foreground">Fast</p>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Countrywide Delivery</p>
               </div>
             </div>
           </div>
@@ -235,9 +235,8 @@ export default function HeroSection() {
 
             {/* Floating Product Card */}
             <div
-              className={`absolute bottom-4 left-4 lg:-left-10 z-20 bg-card backdrop-blur-xl border border-border p-4 rounded-2xl shadow-warm max-w-[200px] transition-all duration-700 ${
-                floatVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-              }`}
+              className={`absolute bottom-4 left-4 lg:-left-10 z-20 bg-card backdrop-blur-xl border border-border p-4 rounded-2xl shadow-warm max-w-[200px] transition-all duration-700 ${floatVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+                }`}
             >
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />

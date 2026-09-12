@@ -148,9 +148,9 @@ export default function ProductDetailPage() {
 
   const allImages = product
     ? [
-        ...(product.images && product.images.length > 0 ? product.images : []),
-        ...(product.image_url && !(product.images && product.images.includes(product.image_url)) ? [product.image_url] : []),
-      ].filter(Boolean)
+      ...(product.images && product.images.length > 0 ? product.images : []),
+      ...(product.image_url && !(product.images && product.images.includes(product.image_url)) ? [product.image_url] : []),
+    ].filter(Boolean)
     : [];
 
   const handleAddToCart = useCallback(() => {
@@ -180,7 +180,7 @@ export default function ProductDetailPage() {
       }
       localStorage.setItem('nyotas_cart', JSON.stringify(cart));
       window.dispatchEvent(new Event('cart-updated'));
-    } catch {}
+    } catch { }
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   }, [user, product, quantity, allImages]);
@@ -468,9 +468,8 @@ export default function ProductDetailPage() {
                 <button
                   onClick={handleAddToCart}
                   disabled={product.stock_quantity === 0}
-                  className={`flex-1 py-3.5 rounded-full font-black text-sm uppercase tracking-widest transition-all duration-200 ${
-                    added ? 'bg-green-500 text-white' : 'bg-primary text-primary-foreground hover:bg-accent'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className={`flex-1 py-3.5 rounded-full font-black text-sm uppercase tracking-widest transition-all duration-200 ${added ? 'bg-green-500 text-white' : 'bg-primary text-primary-foreground hover:bg-accent'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {added ? '✓ Added to Cart!' : product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
                 </button>
@@ -491,7 +490,7 @@ export default function ProductDetailPage() {
 
               <div className="grid grid-cols-3 gap-3 pt-6 border-t border-border">
                 {[
-                  { icon: 'TruckIcon', label: 'Free Delivery', sub: 'Orders over KSh 5,000' },
+                  { icon: 'TruckIcon', label: 'Fast Delivery', sub: 'Countrywide' },
                   { icon: 'ArrowPathIcon', label: '30-Day Returns', sub: 'Easy returns' },
                   { icon: 'ShieldCheckIcon', label: 'Quality Guarantee', sub: 'Handpicked items' },
                 ].map((feat) => (

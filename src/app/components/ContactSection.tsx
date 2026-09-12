@@ -2,13 +2,13 @@
 import React from 'react';
 import Icon from '@/components/ui/AppIcon';
 
-const WHATSAPP_NUMBER = '254700000000'; // Replace with actual business WhatsApp number
+const WHATSAPP_NUMBER = '254702818141'; // Replace with actual business WhatsApp number
 const WHATSAPP_MESSAGE = encodeURIComponent('Hello! I\'d like to inquire about your products at Nyotas Homecare.');
 
 const contactInfo = [
-  { icon: 'EnvelopeIcon', label: 'Email Us', value: 'hello@nyotashomecare.com', sub: 'We reply within 24 hours' },
-  { icon: 'PhoneIcon', label: 'Call / WhatsApp', value: '+254 700 000 000', sub: 'Mon–Fri, 9am–6pm EAT' },
-  { icon: 'MapPinIcon', label: 'Visit Us', value: 'Nairobi, Kenya', sub: 'Showroom open Tue–Sat' },
+  { icon: 'EnvelopeIcon', label: 'Email Us', value: 'nyotashomecare@gmail.com', sub: 'We reply within 24 hours' },
+  { icon: 'PhoneIcon', label: 'Call / WhatsApp', value: '+254 702 818 141', sub: 'Mon-Sat, 8am-7pm EAT' },
+  { icon: 'MapPinIcon', label: 'Visit Us', value: 'Benjoe House, First Floor, Shop B11, Tsavo Road, Nairobi', sub: 'Showroom open Mon-Sat, 8am-7pm EAT' },
 ];
 
 export default function ContactSection() {

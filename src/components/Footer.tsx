@@ -13,20 +13,20 @@ export default function Footer() {
             <Link href="/" className="flex items-center gap-2.5">
               <AppLogo size={32} />
               <span className="text-lg font-black tracking-tight text-foreground">
-                Home<span className="text-primary">Vibe</span>
+                Nyotas&nbsp;<span className="text-primary">Homecare</span>
               </span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Bold home goods that make your space feel intentional.
+              Essentials for Every Home.
             </p>
           </div>
-
+ 
           {/* Right: Links */}
           <div className="flex flex-wrap gap-x-10 gap-y-4">
             <Link href="/products" className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors">
               Shop
             </Link>
-            <Link href="/products" className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/collections" className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors">
               Collections
             </Link>
             <Link href="/#about" className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors">
@@ -44,7 +44,7 @@ export default function Footer() {
         {/* Bottom Row */}
         <div className="mt-10 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © 2026 HomeVibe. All rights reserved.
+            © 2026 Nyotas&nbsp;<span className="text-primary">Homecare</span>. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">

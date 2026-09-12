@@ -6,7 +6,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Shop All Products — Nyotas Homecare',
-  description: 'Browse home goods including furniture, décor, kitchenware, and bedroom essentials.',
+  description: 'Browse home goods including décor, kitchenware, and bedroom essentials.',
   alternates: { canonical: '/products' },
 };
 

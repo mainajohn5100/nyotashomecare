@@ -5,9 +5,9 @@ import AppImage from '@/components/ui/AppImage';
 import Icon from '@/components/ui/AppIcon';
 
 const values = [
-{ icon: 'SparklesIcon', label: 'Bold Design', desc: 'Every piece is chosen for visual impact and lasting style.' },
-{ icon: 'ShieldCheckIcon', label: 'Real Quality', desc: 'We test every product before it reaches your doorstep.' },
-{ icon: 'TruckIcon', label: 'Fast Delivery', desc: 'Free shipping on orders over $75. Most arrive in 3-5 days.' }];
+  { icon: 'SparklesIcon', label: 'Bold Design', desc: 'Every piece is chosen for visual impact and lasting style.' },
+  { icon: 'ShieldCheckIcon', label: 'Real Quality', desc: 'We test every product before it reaches your doorstep.' },
+  { icon: 'TruckIcon', label: 'Fast Delivery', desc: 'Countrywide delivery . Most orders arrive within 24-48 hours.' }];
 
 
 export default function BrandStory() {
@@ -45,21 +45,21 @@ export default function BrandStory() {
             <div
               className="story-reveal relative z-10 img-mask-rounded overflow-hidden aspect-[4/5] shadow-warm"
               style={{ opacity: 0, filter: 'blur(8px)', transform: 'translateY(20px)', transition: 'opacity 0.7s ease, filter 0.7s ease, transform 0.7s cubic-bezier(0.23,1,0.32,1)' }}>
-              
+
               <AppImage
                 src="https://img.rocket.new/generatedImages/rocket_gen_img_1d7da0faf-1772053875727.png"
                 alt="Warm sunlit kitchen interior with neatly arranged cookware, terracotta tiles, and fresh herbs on the countertop"
                 fill
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 42vw" />
-              
+
             </div>
 
             {/* Floating stat card */}
             <div
               className="story-reveal absolute -bottom-6 -right-4 lg:-right-8 z-20 bg-card border border-border p-6 rounded-2xl shadow-warm"
               style={{ opacity: 0, filter: 'blur(8px)', transform: 'translateY(20px)', transition: 'opacity 0.7s ease, filter 0.7s ease, transform 0.7s cubic-bezier(0.23,1,0.32,1)' }}>
-              
+
               <div className="grid grid-cols-2 gap-5">
                 <div>
                   <p className="text-3xl font-black text-foreground">2019</p>
@@ -70,7 +70,7 @@ export default function BrandStory() {
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">Products</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-black text-foreground">12k</p>
+                  <p className="text-3xl font-black text-foreground">1.2k+</p>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">Customers</p>
                 </div>
                 <div>
@@ -89,7 +89,7 @@ export default function BrandStory() {
             <div
               className="story-reveal"
               style={{ opacity: 0, filter: 'blur(8px)', transform: 'translateY(20px)', transition: 'opacity 0.7s ease, filter 0.7s ease, transform 0.7s cubic-bezier(0.23,1,0.32,1)' }}>
-              
+
               <p className="section-label mb-4">Our Story</p>
               <h2 className="text-display text-foreground mb-6">
                 We are{' '}
@@ -98,18 +98,18 @@ export default function BrandStory() {
                 <span className="text-primary border-b-4 border-primary border-dotted">worth it.</span>
               </h2>
               <p className="text-lg text-muted-foreground leading-relaxed max-w-xl">
-                HomeVibe was born from a simple frustration: too many home stores sold the same forgettable stuff. We curate pieces with real design intention — furniture that holds up, décor that sparks joy, kitchenware you actually reach for. Every product earns its place in our store.
+                Nyotas Homecare was born from a simple frustration: too many home stores sold the same forgettable stuff. We curate pieces with real design intention: furniture that holds up, décor that sparks joy, kitchenware you actually reach for. Every product earns its place in our store.
               </p>
             </div>
 
             {/* Values */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-4">
               {values.map((val, i) =>
-              <div
-                key={val.label}
-                className="story-reveal flex flex-col gap-3 p-5 bg-secondary rounded-2xl border border-border"
-                style={{ opacity: 0, filter: 'blur(8px)', transform: 'translateY(20px)', transition: 'opacity 0.7s ease, filter 0.7s ease, transform 0.7s cubic-bezier(0.23,1,0.32,1)', transitionDelay: `${(i + 3) * 0.15}s` }}>
-                
+                <div
+                  key={val.label}
+                  className="story-reveal flex flex-col gap-3 p-5 bg-secondary rounded-2xl border border-border"
+                  style={{ opacity: 0, filter: 'blur(8px)', transform: 'translateY(20px)', transition: 'opacity 0.7s ease, filter 0.7s ease, transform 0.7s cubic-bezier(0.23,1,0.32,1)', transitionDelay: `${(i + 3) * 0.15}s` }}>
+
                   <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                     <Icon name={val.icon as Parameters<typeof Icon>[0]['name']} size={20} className="text-primary" />
                   </div>
@@ -122,7 +122,7 @@ export default function BrandStory() {
             <div
               className="story-reveal flex flex-col sm:flex-row gap-4 mt-2"
               style={{ opacity: 0, filter: 'blur(8px)', transform: 'translateY(20px)', transition: 'opacity 0.7s ease, filter 0.7s ease, transform 0.7s cubic-bezier(0.23,1,0.32,1)' }}>
-              
+
               <Link href="/products" className="btn-primary">
                 Shop The Collection
                 <Icon name="ArrowRightIcon" size={18} />

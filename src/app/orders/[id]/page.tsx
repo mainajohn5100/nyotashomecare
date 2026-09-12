@@ -152,9 +152,8 @@ export default function OrderDetailsPage() {
                   return (
                     <React.Fragment key={step}>
                       <div className="flex flex-col items-center flex-shrink-0">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                          isCompleted ? 'bg-primary' : 'bg-secondary border-2 border-border'
-                        }`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isCompleted ? 'bg-primary' : 'bg-secondary border-2 border-border'
+                          }`}>
                           {isCompleted ? (
                             <Icon name="CheckIcon" size={14} className="text-primary-foreground" />
                           ) : (
@@ -245,7 +244,7 @@ export default function OrderDetailsPage() {
                 </div>
                 <div>
                   <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-0.5">Estimated Ready</p>
-                  <p className="font-bold text-foreground text-sm">3–5 business days</p>
+                  <p className="font-bold text-foreground text-sm">24-48 hours</p>
                 </div>
               </div>
             </div>
