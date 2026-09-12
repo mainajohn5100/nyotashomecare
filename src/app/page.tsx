@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: 'Nyotas Homecare - Essentials for Every Home',
   description: 'Shop Nyotas Homecare for décor, kitchenware, and everyday home goods. Bold design, real quality — pieces that make your space feel intentional.',
   alternates: { canonical: '/' },
+  verification: {
+    google: 'swDTo4jcp9HHuF5Bcmcw0qa9U5C3iDfcbr6ifLaClEY',
+  },
 };
 
 export default function HomePage() {

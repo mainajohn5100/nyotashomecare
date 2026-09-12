@@ -31,6 +31,9 @@ export const metadata: Metadata = {
     description: 'Decor, Kitchenware and everything you need to make your house a home.',
     images: [{ url: '/assets/images/app_logo.png', width: 1200, height: 630 }],
   }, 
+  verification: {
+    google: 'swDTo4jcp9HHuF5Bcmcw0qa9U5C3iDfcbr6ifLaClEY',
+  },
 };
 
 export default function RootLayout({
